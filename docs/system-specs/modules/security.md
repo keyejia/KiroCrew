@@ -750,6 +750,9 @@ Two mechanisms make "the split changed nothing for a caller" a tested claim rath
     - `exfil_git_object.py` — the git object name carve-out from the base64-blob test: a query value that is exactly 40 lowercase hex digits (a SHA-1 commit name) does not count as a blob.
     - `exfil_oauth.py` — the OAuth authorization-endpoint set (builtin, operator file, discovered), its SEL audit events and the safe shape diagnostics.
     - `exfil_bash.py` — the data-egress and reverse-shell command gate, which reads the deny tier's single-command eligibility test from `denied_rules.py` and, for the date/search carve-out, the first raw word (quotes kept, split at live space and tab only) from `shell_commands.py`.
+- `gh_file_body.py` — gh's body-from-file matcher behind `data-exfil-gh-file-body`, which
+  the exfil gate in `exfil_bash.py` and the `is_denied` floor in `deny_gate.py` both
+  call. It is not an owner of the `exfil.py` facade.
 - `argv_rules.py` — the `chmod`/`chown` deny rows and the `dd` raw-disk row, matched on a
   command's real argv instead of as text regexes. It reuses the shared payload walk and
   the shell reader (see *Argv-matched rows* below).
@@ -825,7 +828,7 @@ Two mechanisms make "the split changed nothing for a caller" a tested claim rath
   Within one `is_denied` call (`shell_commands.sharing_views`) both walks share one
   result per frame text; the cache lives only for that call.
   It sits on `shell_normalizer.py` (which imports it inside that walk) and below
-  `rm_floor.py`, `exfil_bash.py` and `deny_gate.py`.
+  `rm_floor.py`, `gh_file_body.py`, `exfil_bash.py` and `deny_gate.py`.
 - `rm_floor.py` — the recursive-force `rm` floor behind the two `local-destructive-rm-rf-*`
   catalog rows (see *Recursive-force `rm` floor* below). It imports `shell_commands.py` for
   the command split, `shell_normalizer.py` for unquoting and the program basename, and
@@ -3082,6 +3085,23 @@ command and `s///e` flag run a shell. Anything with shell evaluation in it falls
 through to the unchanged denial — including the reporter's multi-statement
 diagnostic loop, which needs `$(…)` and is not carved out; its individual
 `date` conversion run on its own is.
+
+gh's own body-from-file flags (`data-exfil-gh-file-body`) are read on shell
+words, only where `gh` is a command's program word: `gh api|repo --input <file>`,
+`--field k=@<file>`, `gh release --notes-file <file>`. Each command's argv comes
+from the shared `shell_commands.read_commands(heredocs=True)` (the same reading the
+`rm` floor uses), so a redirection (a leading `2>/dev/null`) is never the program
+word, a here-document body is data, and an unquoted body adds only the commands of
+its `$( … )` and backtick substitutions. The matcher keeps no here-document scanner
+of its own, so the shapes that reader misreads (an arithmetic `<<`, a `)` inside a
+here-document nested in `$( … )`, a quoted tag holding a backslash-newline) are not
+refused here either; main allows them too. A known option's value is data. Stdin (`-`, `/dev/stdin`, `/dev/fd/N`,
+`<( … )`, `k=@-`) is allowed, so a pipe still carries a file: the row is
+friction, not containment. The row's `pattern` is a readable subset kept out of
+the regex tier (`_GH_FILE_BODY_PATTERN`); the exfil gate and an `is_denied`
+floor (the path script hooks take) run the same matcher (`gh_file_body.py`) while
+the row is enabled. A `$'…'` word is judged after bash's escape decoding
+(`shell_normalizer_escapes._decode_ansi_c_body`), so `$'--\x69nput'` reads as `--input`.
 
 ### SEL Forward Callback (`sel.py`)
 

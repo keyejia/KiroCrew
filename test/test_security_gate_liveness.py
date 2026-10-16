@@ -691,7 +691,16 @@ def _url_payload_command(n: int) -> str:
 #: Raised by 34, from 34,699, to the package's measured size on main: the 175 above
 #: were counted on a base without the security fixes that merged before it, so main
 #: landed over budget. No code changes; nothing is relaxed. Re-measured.
-_PACKAGE_LINE_BUDGET = 34_733
+#: Raised by 266 more, from 34,733, for gh's body-from-file flags in ``gh_file_body``
+#: (`--input`, `--field k=@f`, `release --notes-file`): one matcher keyed to a plain
+#: `gh` program word, reading each command's argv through ``shell_commands`` (so a
+#: redirection, a leading one included, is never the program word); gh's own flag
+#: parsing (short-flag clusters, `release download -p`); its catalog row, kept out of
+#: the regex tier; and the ``is_denied`` floor that runs the same matcher for script
+#: hooks. Its argv comes from the shared ``read_commands(heredocs=True)``; the matcher
+#: keeps no here-document scanner of its own. A ``$'…'`` word is decoded by the
+#: shared ANSI-C decoder before it is judged. No pattern moved.
+_PACKAGE_LINE_BUDGET = 34_999
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second
