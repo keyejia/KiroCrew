@@ -769,6 +769,14 @@ function TerminalView({ sessionId, cwd, remoteSlot, chatSlot, visible, onSendToC
                     ? i18nT('components.cliPanel.reconnecting')
                     : i18nT('components.cliPanel.displaced_message')}
                 </span>
+                {/* Enter in the focused pane takes the terminal back (the
+                    registry's onData). The hint names a hardware key, so it
+                    is shown on keyboard devices only. */}
+                {displaced && !touchDevice && (
+                  <span className="shrink-0 text-muted" data-testid="cli-panel-displaced-enter-hint">
+                    {i18nT('components.cliPanel.displaced_enter_hint')}
+                  </span>
+                )}
               </>
             ) : (
               /* Rejected opens and exhausted retries use the shared error
@@ -794,6 +802,7 @@ function TerminalView({ sessionId, cwd, remoteSlot, chatSlot, visible, onSendToC
                 type="button"
                 onClick={() => retryTerminalConnection(sessionId)}
                 disabled={reconnecting}
+                aria-keyshortcuts={displaced && !touchDevice ? 'Enter' : undefined}
                 className="px-2 py-0.5 text-[12px]"
               >
                 {displaced

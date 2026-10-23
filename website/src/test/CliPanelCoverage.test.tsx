@@ -809,6 +809,32 @@ describe('CliPanel disconnected banner', () => {
     fireEvent.click(takeBack)
     expect(registry.retryTerminalConnection).toHaveBeenCalledWith(sessionId)
   })
+
+  it('tells a keyboard user that Enter takes the displaced terminal back', () => {
+    registry.connStatus.value = 'disconnected'
+    registry.displaced.value = true
+    mount()
+    expect(screen.getByRole('status')).toHaveTextContent(i18nT('components.cliPanel.displaced_enter_hint'))
+    expect(screen.getByRole('button', { name: i18nT('components.cliPanel.use_here') }))
+      .toHaveAttribute('aria-keyshortcuts', 'Enter')
+  })
+
+  it('drops the Enter hint on a touch device and for an ordinary disconnect', () => {
+    registry.connStatus.value = 'disconnected'
+    registry.displaced.value = true
+    touch.value = true
+    const { unmount } = mount()
+    expect(screen.queryByTestId('cli-panel-displaced-enter-hint')).toBeNull()
+    expect(screen.getByRole('button', { name: i18nT('components.cliPanel.use_here') }))
+      .not.toHaveAttribute('aria-keyshortcuts')
+    unmount()
+
+    touch.value = false
+    registry.displaced.value = false
+    mount()
+    expect(screen.queryByTestId('cli-panel-displaced-enter-hint')).toBeNull()
+    expect(screen.getByRole('button', { name: RECONNECT_LABEL })).not.toHaveAttribute('aria-keyshortcuts')
+  })
 })
 
 /* ── selection toolbar ────────────────────────────────────────────────────── */
