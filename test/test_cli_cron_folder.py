@@ -202,6 +202,23 @@ class TestCliAddFolder:
         assert "Invalid cron expression" in capsys.readouterr().err
         assert _jobs("bad-cron") == []
 
+    def test_a_duplicate_managed_key_never_creates_a_folder(self, home, no_create, capsys):
+        # A re-run installer under a key that already has a job is refused by
+        # add_managed_job; the refusal must come before the missing folder is
+        # created, or every re-run leaves an empty folder behind.
+        CronService(base_dir=config_dir()).add_managed_job(
+            "installer:x", name="first", message="go", every_secs=300
+        )
+        before = _folders_file().read_bytes()
+        args = _add_args("second", "Fresh")
+        args.managed_by = "installer:x"
+        with pytest.raises(SystemExit) as exc:
+            cli_commands._cron_dispatch(args)
+        assert exc.value.code == 1
+        assert "already managed by" in capsys.readouterr().err
+        assert _jobs("second") == []
+        assert _folders_file().read_bytes() == before
+
 
 # ---------------------------------------------------------------------------
 # cron update --folder
@@ -239,8 +256,12 @@ class TestCliUpdateFolder:
         assert job.folder_id == "aaaa1111"
 
     def test_unknown_job_creates_no_folder(self, home, no_create, audit, capsys):
-        cli_commands._cron_dispatch(_update_args("nosuchjob", "Fresh"))
-        assert "Job not found: nosuchjob" in capsys.readouterr().out
+        before = _folders_file().read_bytes()
+        with pytest.raises(SystemExit) as exc:
+            cli_commands._cron_dispatch(_update_args("nosuchjob", "Fresh"))
+        assert exc.value.code == 1
+        assert "Job not found: nosuchjob" in capsys.readouterr().err
+        assert _folders_file().read_bytes() == before
 
     def test_unresolvable_ref_exits_1_and_leaves_the_job_alone(
         self, home, no_create, audit, capsys
@@ -297,6 +318,16 @@ class TestCliListFolder:
         assert "[folder: Veille]" in by_name["in-veille"]
         assert "[folder: (none)]" in by_name["loose"]
         assert "[folder: eeee5555]" in by_name["stale"]
+
+    def test_folder_label_has_no_live_terminal_controls(self, home, no_create, capsys):
+        osc52 = "\x1b]52;c;cHduZWQ=\x07"
+        _write_folders([{"id": "ffff6666", "name": f"Bad{osc52}\nX", "order": 0}])
+        _seed_job("tricky", "ffff6666")
+        cli_commands._cron_dispatch(_list())
+        out = capsys.readouterr().out
+        assert "\x1b" not in out and "\x07" not in out
+        line = next(line for line in _job_lines(out) if "  tricky  " in line)
+        assert "[folder: Bad\\x0aX]" in line
 
     def test_filter_by_name_lists_only_that_folder(self, home, no_create, capsys):
         _seed_job("in-veille", "aaaa1111")
