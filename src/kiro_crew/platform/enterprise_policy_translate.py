@@ -12,7 +12,8 @@ Crew ruleset has one mode (allow-list or deny-list):
 * ``deny``/``ask`` with ``exclude E``: only ``E`` is allowed (several excludes intersect);
 * ``deny``/``ask`` with ``match L``: beside an exclude, ``L`` is taken out of the
   allowed set. Alone it grants nothing, so the capability stays unnamed and the
-  enterprise baseline (off) holds;
+  enterprise baseline (off) holds; for a capability whose baseline allows something
+  (``permission_mode``), ``L`` is taken out of that baseline instead;
 * ``allow``: no effect of its own. The control plane sends a ``deny exclude`` beside
   every grant, and that rule already says what is allowed.
 
@@ -23,7 +24,7 @@ matcher compares them: stripped and case-folded. ``ask`` reads as ``deny``. A ma
 capability no rule restricts is left out of the document.
 
 A ruleset row may carry a floor: entries its Crew scope never forbids
-(``approval_modes`` keeps ``normal``, ``trust`` and ``trust_reads``). They are added to
+(``approval_modes`` keeps ``normal``). It is added to
 the allowed set, because the scope refuses an allow-list that leaves one out.
 
 An on/off capability (one with no resource) reduces to ``{"enabled": bool}``
@@ -56,11 +57,12 @@ import json
 import logging
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, cast
 
 import yaml  # type: ignore[import-untyped]
 
 from kiro_crew.platform.governance import _ORDINAL_SCALES, MODE_ALLOW
+from kiro_crew.platform.governance_parts.baseline import BASELINE_CONTROLS
 from kiro_crew.platform.governance_parts.catalog import SCOPE_CATALOG
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,9 @@ class Managed:
     kind: str = RULESET
     #: Entries the Crew scope never forbids, added to a translated allow-list.
     floor: Tuple[str, ...] = ()
+    #: The scope's own enterprise baseline when it allows something. A ``deny match``
+    #: with no ``exclude`` then narrows this list rather than leaving it whole.
+    baseline: Tuple[str, ...] = ()
 
 
 #: Each capability Kiro Crew governs from enterprise management, and where it lands.
@@ -88,7 +93,9 @@ MANAGED: Mapping[str, Managed] = MappingProxyType(
         "messaging": Managed(("capabilities", "messaging"), SWITCH),
         "cron": Managed(("capabilities", "cron"), SWITCH),
         "permission_mode": Managed(
-            ("approval_modes",), floor=SCOPE_CATALOG["approval_modes"].always_permitted
+            ("approval_modes",),
+            floor=SCOPE_CATALOG["approval_modes"].always_permitted,
+            baseline=tuple(cast(List[str], BASELINE_CONTROLS["approval_modes"]["allow"])),
         ),
     }
 )
@@ -189,7 +196,9 @@ def _intersect(sets: List[List[str]], capability: str) -> List[str]:
     return allowed
 
 
-def ruleset(rules: List[Mapping[str, Any]], capability: str) -> Optional[Dict[str, Any]]:
+def ruleset(
+    rules: List[Mapping[str, Any]], capability: str, baseline: Tuple[str, ...] = ()
+) -> Optional[Dict[str, Any]]:
     """The Crew ruleset for *capability*'s rules, or ``None`` if none restricts it."""
     denied: List[str] = []
     excludes: List[List[str]] = []
@@ -223,6 +232,11 @@ def ruleset(rules: List[Mapping[str, Any]], capability: str) -> Optional[Dict[st
                 allowed = [p for p in allowed if _is_glob(p) or not _matches(p, entry)]
                 if any(_is_glob(p) for p in allowed):
                     raise Unrepresentable(f"{capability}: deny {entry!r} beside an allowed glob")
+        return {"mode": MODE_ALLOW, "allow": sorted(set(allowed))}
+    if denied and baseline:
+        # A baseline that allows something (``approval_modes``): the deny takes the
+        # matched entries out of it. Leaving the capability unnamed would keep them.
+        allowed = [b for b in baseline if not any(_matches(b, d) for d in denied)]
         return {"mode": MODE_ALLOW, "allow": sorted(set(allowed))}
     # Deny ``match`` entries with no ``exclude`` grant nothing. Leaving the capability
     # unnamed keeps the enterprise baseline (off). A deny-list would replace that
@@ -269,7 +283,7 @@ def _control(
 ) -> Optional[Dict[str, Any]]:
     if row.kind == SWITCH:
         return switch(rules, capability)
-    rs = ruleset(rules, capability)
+    rs = ruleset(rules, capability, row.baseline)
     if rs is not None and row.floor:
         rs = _with_floor(rs, row.floor)
     return rs
