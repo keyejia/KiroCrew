@@ -42,7 +42,12 @@ from kiro_crew.slack.format import (
     escape_mrkdwn,
     replace_options_blocks,
 )
-from kiro_crew.slack.handler import APPROVAL_INTERACTIVE, handle_message, is_allowed_user
+from kiro_crew.slack.handler import (
+    APPROVAL_INTERACTIVE,
+    handle_message,
+    is_allowed_user,
+    is_shared_user,
+)
 from kiro_crew.slack.interactions_context import _orch, register_view_handler
 from kiro_crew.slack.outbound import (
     OptionsSeveralRequest,
@@ -770,7 +775,7 @@ async def _handle_options_several_submission(payload: dict) -> None:
         return
     # The same gate every OPTIONS click passes in ``dispatch``: an allowed user,
     # then the channels governance policy -- both before anything is edited or sent.
-    if user_id != request.user_id or not is_allowed_user(user_id):
+    if user_id != request.user_id or not (is_allowed_user(user_id) or is_shared_user(user_id)):
         sel().log_tool_invocation(
             session_key=request.thread_ts,
             agent="kirocrew",
