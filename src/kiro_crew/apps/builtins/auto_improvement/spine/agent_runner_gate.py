@@ -114,6 +114,7 @@ _FORBIDDEN_SUBCOMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
         ("api",),  # can PATCH/POST anything the token reaches
         ("secret",),
         ("workflow", "run"),
+        ("repo", "delete"),
     ),
     "git": (
         ("push",),
@@ -223,27 +224,47 @@ def _refusal(text: str, *, depth: int) -> str:
         # denylist, so exhausting the budget must not become a way through it.
         return "command nests shells too deeply to analyze"
 
-    # Each shell-separated segment is its own command; check them all.
-    normalized = text.replace("&&", "\n").replace("||", "\n").replace(";", "\n")
-    normalized = normalized.replace("|", "\n").replace("$(", "\n").replace("`", "\n")
-    # A BARE `&` backgrounds its left side and starts a new command, exactly like `;` —
-    # but is NOT caught by the `&&` replace above (that consumed the doubled form). Without
-    # this, `true & gh pr comment --body X` tokenizes to `binary='true'` (harmless) and the
-    # `gh pr comment`/`curl` behind the `&` slips past the denylist the watcher's
-    # outsider-writable prompt exists to enforce. Ordered AFTER `&&` so only the single-`&`
-    # separator remains to split on. As with the wrapper options: a parser that inspects
-    # fixed positions is evaded by adding a position.
-    normalized = normalized.replace("&", "\n")
-    # Split on the subshell / command-substitution PARENTHESES too. `$(` and backtick above
-    # open a substitution, but the CLOSING `)` stayed attached to the last inner token, so
-    # `echo $(gh pr ready)` tokenized the verb as `ready)` (≠ `ready`) and slipped past the
-    # `("pr","ready")` denylist; a bare subshell `(gh pr ready)` has the same shape. A `(` or
-    # `)` is never part of a legitimate command word here, so splitting on both isolates the
-    # inner command with no trailing bracket — over-checking at worst, the safe direction for a
-    # denylist.
-    normalized = normalized.replace("(", "\n").replace(")", "\n")
-    for segment in normalized.splitlines():
-        words = _shell_words(segment)
+    # Each shell-separated command is checked on its own. Quotes are read BEFORE the
+    # split, so a quoted `;` stays in its word while `sh -c 'a; b'` still yields `b` as a
+    # command. `\x00` marks a substitution opener (backtick, `$(`), which runs even inside
+    # double quotes. Redirections split too, which only checks more.
+    seps = "();<>|&\n\x00"
+    marked = text.replace("`", "\x00").replace("$(", "\x00(")
+    lex = shlex.shlex(marked, posix=True, punctuation_chars=seps)
+    lex.whitespace, lex.whitespace_split, lex.commenters = " \t\r", True, ""
+    try:
+        tokens = list(lex)
+    except ValueError:
+        # Unclosed quotes, or an apostrophe in a comment or heredoc body: only the
+        # quote-blind split below runs.
+        tokens = None
+    segments: list[list[str]] = [[]]
+    for tok in tokens or []:
+        if tok and set(tok) <= set(seps):
+            segments.append([])
+            continue
+        if "\x00" in tok:  # a quoted word holding a substitution: check what it runs
+            reason = _refusal(tok, depth=depth + 1)
+            if reason:
+                return reason
+        segments[-1].append(tok)
+    # Text where shlex and bash may read quotes differently: heredoc bodies, comments,
+    # substitutions, ANSI-C strings, escapes, or anything over more than one line.
+    quote_blind_triggers = ("\n", "<<", "#", "$(", "`", "$'", "\\")
+    if tokens is None or any(c in text for c in quote_blind_triggers):
+        # shlex reads a comment, a `"` nested in `$(`, or ANSI-C `$'...'` unlike bash,
+        # so a quote it sees can hide a command. Such text also gets a quote-blind split,
+        # and every command either split finds is checked. A segment that splits a quote
+        # in two has its stray quote marks dropped, so `sh -c 'git push` still reads.
+        blind = text
+        for sep in ("&&", "||", ";", "|", "$(", "`", "&", "(", ")"):
+            blind = blind.replace(sep, "\n")
+        for s in blind.splitlines():
+            try:
+                segments.append(shlex.split(s, posix=True))
+            except ValueError:
+                segments.append([w.strip("'\"") for w in s.split()])
+    for words in segments:
         # Drop leading VAR=value assignments (`GH_TOKEN=x gh api …`).
         while words and "=" in words[0] and not words[0].startswith("-"):
             words = words[1:]
@@ -264,6 +285,26 @@ def _refusal(text: str, *, depth: int) -> str:
                     break
             # Fall through: a shell invoked WITHOUT -c still gets its own args checked below.
 
+        # `eval` joins its arguments and runs them as a script. Re-check that script
+        # whole, before any option or VAR=value stripping: the wrapper path would drop
+        # a quoted script word that holds `=` (`eval 'GH_TOKEN=x gh repo delete'`).
+        if binary == "eval":
+            script = words[1:]
+            if script[:1] == ["--"]:
+                script = script[1:]
+            reason = _refusal(" ".join(script), depth=depth + 1)
+            if reason:
+                return reason
+            continue
+
+        # `script -c CMD` / `--command[=]CMD` runs CMD in a shell; the skip below eats it.
+        if binary == "script":
+            for i, w in enumerate(words[1:], start=1):
+                short_c = w.startswith("-") and not w.startswith("--") and w.endswith("c")
+                nxt = words[i + 1] if i + 1 < len(words) and (short_c or w == "--command") else None
+                cmd = w[10:] if w.startswith("--command=") else nxt
+                if cmd is not None and (reason := _refusal(cmd, depth=depth + 1)):
+                    return reason
         # A wrapper runs the command that follows it, so check that command instead.
         if binary in _COMMAND_WRAPPERS:
             wrapped = list(words[1:])
@@ -305,7 +346,11 @@ def _refusal(text: str, *, depth: int) -> str:
             while wrapped and "=" in wrapped[0] and not wrapped[0].startswith("-"):
                 wrapped = wrapped[1:]
             if wrapped:
-                reason = _refusal(" ".join(wrapped), depth=depth + 1)
+                # An exec-style wrapper passes its words on unparsed, so they are
+                # re-quoted; `watch` and `script` hand them, joined, to a shell.
+                shell_runner = binary in ("watch", "script")
+                joined = " ".join(wrapped) if shell_runner else shlex.join(wrapped)
+                reason = _refusal(joined, depth=depth + 1)
                 if reason:
                     return reason
             continue
