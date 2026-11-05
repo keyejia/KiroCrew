@@ -126,6 +126,16 @@ async def vet_step_spawn(
     from kiro_crew.subagent import _vet_spawn_governance, validate_cwd
 
     denial = _vet_spawn_governance(session_key, agent or "", app=app)
+    if not denial and not agent:
+        # Nothing names an unnamed step's worker later, so its empty name is final:
+        # an ``agents`` allow-list of names refuses it.
+        from kiro_crew.platform.governance_profiles import governance_permits
+
+        scoped = governance_permits(
+            "capabilities.spawn", "agents:", session_key=session_key, app=app
+        )
+        if not getattr(scoped, "permitted", False):
+            denial = "an unnamed agent is not permitted by spawn policy"
     if denial:
         logger.warning("workflow agent step refused by governance: %s", denial)
         raise WorkflowSpawnRefused(f"spawn refused by governance: {denial}")

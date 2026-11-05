@@ -251,6 +251,22 @@ async def _run_inner_impl(
             source="subagent",
             resources=f"subagent_id={info.id},inherited_agent={agent}",
         )
+    elif not agent and not info.crew:
+        # No name was given and none was inherited, so the empty name is final:
+        # an ``agents`` allow-list of names refuses it.
+        from kiro_crew.platform.governance_profiles import governance_permits
+
+        scoped = await asyncio.to_thread(
+            governance_permits,
+            "capabilities.spawn",
+            "agents:",
+            session_key=info.parent_session_key,
+            app=info.app,
+        )
+        if not getattr(scoped, "permitted", False):
+            raise RuntimeError(
+                "spawn refused by governance: an unnamed agent is not permitted by spawn policy"
+            )
     effective_cwd = info.cwd or str(getattr(self._manager._sessions, "_pool_cwd", "") or "")
     from kiro_crew.mate_worker import is_own_worker_execution
 

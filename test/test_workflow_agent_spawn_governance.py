@@ -314,6 +314,17 @@ async def test_the_agent_scope_refuses_only_the_agent_outside_it(monkeypatch) ->
     assert [row["agent"] for row in permitted] == [OTHER_AGENT, OTHER_AGENT], permitted
 
 
+async def test_an_unnamed_step_answers_the_agent_scope_with_its_empty_name(monkeypatch) -> None:
+    """Nothing names an unnamed step's worker later, so an allow-list of names refuses it."""
+    _deny_one_agent(monkeypatch, "")
+
+    refused = await _drive_both_step_paths("unnamed", {})
+    assert not refused, refused
+
+    permitted = await _drive_both_step_paths("named", {"agent": OTHER_AGENT})
+    assert len(permitted) == 2, permitted
+
+
 async def test_an_app_bound_profile_refuses_the_app_s_own_workflow_spawn(monkeypatch) -> None:
     """F1 parity: the app identity reaches the ceiling, so an app profile binds.
 
