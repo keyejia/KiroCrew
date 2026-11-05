@@ -924,6 +924,7 @@ export default function ChatPage({ mode, embedded, embedMode, popout, noUrlSync 
     steerMutation,
     composerRef,
     composerSlotRef,
+    composerMountedRef,
     inputRef,
     setInput,
     stores: draftStores,

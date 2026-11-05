@@ -29,7 +29,7 @@ import { uniqueNotificationTs } from './notificationTs'
 import { PREFILL_STORAGE_KEY } from '../../../utils/navIntent'
 import { isComposerSendHeld } from '../../../utils/composerSendHolds'
 import type { ComposerHandle } from '../../../chat-core/composer/Composer'
-import { mergeRecoveredDraft, setDraft } from '../../../utils/chatDrafts'
+import { loadDrafts, mergeRecoveredDraft, setDraft } from '../../../utils/chatDrafts'
 import { setFileDraft } from '../../../utils/chatFileDrafts'
 import { NO_SLOT_TOKEN_KEY } from '../../../utils/chatFileTokenDrafts'
 import { setPasteDraft } from '../../../utils/chatPasteDrafts'
@@ -377,8 +377,12 @@ export function useComposerSend({
         // No slot yet: the same pending pick the agent picker makes, and like
         // it, drop a model chosen for the previous agent (#2035).
         onPendingAgent: (name) => { setPendingAgent(name, 'template'); setPendingModel('') },
+        // A page left meanwhile sends nothing: its staging is not the fork's.
+        sendToFork: (key, prompt) => { if (!connected || !composerMountedRef.current) return false; void send(prompt, key); return true },
       })
       if (slashResult.intercepted) {
+        // A page left meanwhile re-reads the store, which may hold a `/fork` prompt.
+        if (!composerMountedRef.current) drafts.current = loadDrafts()
         // Not a send either way: the staged quote stays staged for the real one
         // -- while this slot's composer is still the live one. The await above
         // can span a slot switch, and the stage is not per slot, so restaging
