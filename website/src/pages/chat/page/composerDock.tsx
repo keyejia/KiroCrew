@@ -194,6 +194,7 @@ export function useComposerAboveBand({
           folderSortMode={folderSortMode}
               onAccept={folderSuggestionAccept}
               onDecline={folderSuggestionDecline}
+              applied={folderSuggestion.applied}
             />
           </div>
         ) : activeTip && (

@@ -114,6 +114,17 @@ describe('FolderSuggestionCard', () => {
     expect(onAccept).not.toHaveBeenCalled()
   })
 
+  it('an applied card names where the session went: Undo files it back to the top, Keep only dismisses', async () => {
+    const { onAccept, onDecline } = renderCard({ applied: true })
+    // No question and no dropdown: the backend already filed it.
+    expect(screen.queryByTestId('folder-suggestion-select')).toBeNull()
+    expect(screen.getByTestId('folder-suggestion-applied').title).toBe('projects › feature')
+    await userEvent.click(screen.getByTestId('folder-suggestion-undo'))
+    expect(onAccept).toHaveBeenCalledExactlyOnceWith('')
+    await userEvent.click(screen.getByTestId('folder-suggestion-keep'))
+    expect(onDecline).toHaveBeenCalledTimes(1)
+  })
+
   it('always renders the lucide glyph, never a folder emoji', () => {
     // The card takes no icon prop: an emoji is font-dependent (tofu box wherever
     // the platform has no emoji font) and would not inherit --accent.
