@@ -3,6 +3,8 @@
 :mod:`kiro_crew.doc_parser` flattens a document to one plaintext string, which is
 what an agent reading an attachment wants. The dashboard's file viewer wants the
 structure back, so this module returns a JSON-serializable block list instead.
+For a .docx that plaintext is this module's walk flattened (:func:`docx_text`), so
+the two shapes cannot disagree about what a document says.
 
 Hardening is inherited, not re-spelled: the archive-inventory preflight and the
 bounded per-entry reader are doc_parser's, imported directly so a change to
@@ -77,6 +79,7 @@ class _Budget:
         # were at import time.
         self.nodes_left = MAX_NODES
         self.chars_left = MAX_CHARS
+        self.max_cols: int | None = MAX_TABLE_COLS
         #: Set when a cap stopped extraction, so the caller can tell a short
         #: document from a trimmed one and say so in the UI.
         self.truncated = False
@@ -123,12 +126,16 @@ class _Budget:
         the character budget as ONE paragraph, and the browser then has half a
         million elements to lay out.
         """
-        if len(text) > self.chars_left or nodes > self.nodes_left:
+        if not self.fits(len(text), nodes):
             self.refuse()
             return False
         self.chars_left -= len(text)
         self.nodes_left -= nodes
         return True
+
+    def fits(self, chars: int, nodes: int) -> bool:
+        """Would a unit of *chars* characters and *nodes* elements fit what is left?"""
+        return chars <= self.chars_left and nodes <= self.nodes_left
 
     def refuse(self) -> None:
         """Spend the REST of the allowance: the unit being built does not fit.
@@ -160,6 +167,44 @@ class _Budget:
         if not self.spend(text, nodes):
             return False
         blocks.append(block)
+        return True
+
+
+class _TextBudget(_Budget):
+    """The plain-text allowance: soft, and on characters only.
+
+    :func:`kiro_crew.doc_parser.extract_text` stops after the unit that MEETS its
+    *max_chars*, keeping that unit whole. Its callers ask for one character past
+    their cap to see a cut, and redact units they must see whole, so the block
+    budget's refusal of the unit that does not fit would hide both. A text has no
+    DOM, so it has no element or column ceiling either.
+    """
+
+    def __init__(self, max_chars: int | None) -> None:
+        super().__init__()
+        self.max_cols = None
+        self.max_chars = max_chars
+        #: The text's length so far. Exact for paragraphs; a table row is charged
+        #: without its cell separators, which can only let the walk run on.
+        self.collected = 0
+
+    def stop(self) -> bool:
+        # At least one character: even a budget of 0 is met by the first unit.
+        return self.max_chars is not None and self.collected >= max(self.max_chars, 1)
+
+    def fits(self, chars: int, nodes: int) -> bool:
+        return True
+
+    def spend(self, text: str, nodes: int) -> bool:
+        """Take every unit until the budget is met, the one that meets it included."""
+        if not text:
+            return True
+        if self.stop():
+            return False
+        # The separator is charged only BETWEEN units: charged to the first one
+        # too, a cap-sized opening unit would stop the walk while the caller's
+        # length check reads the cut as whole.
+        self.collected += len(text) + (1 if self.collected else 0)
         return True
 
 
@@ -208,24 +253,44 @@ def extract_blocks(
     return blocks, budget.truncated
 
 
+def docx_text(zf: zipfile.ZipFile, max_chars: int | None = None) -> str:
+    """The .docx body as plain text: the block walk, flattened.
+
+    One line per paragraph, heading and list item, and one per non-empty table
+    cell, row by row. This is what :func:`kiro_crew.doc_parser.extract_text`
+    returns for a .docx; that function owns admission and the archive vet.
+    """
+    lines: list[str] = []
+    for block in _docx_blocks(zf, _TextBudget(max_chars)):
+        if block["type"] == "paragraph":
+            lines.append("".join(run["text"] for run in block["runs"]))
+        elif block["type"] == "heading":
+            lines.append(block["text"])
+        elif block["type"] == "list":
+            lines.extend(block["items"])
+        elif block["type"] == "table":
+            lines.extend(cell for row in block["rows"] for cell in row if cell)
+    return "\n".join(lines)
+
+
 # ── Shared helpers ──
 
 
 def _parse_member(zf: zipfile.ZipFile, member: str) -> Any | None:
     """Read and XML-parse one ZIP member, or None when it is absent/unusable.
 
-    Absent, over the per-entry decompression cap and malformed all collapse to
-    None: there is no way to render half a part, and doc_parser's contract is
-    that an unreadable document degrades rather than raises.
+    Absent, over the per-entry decompression cap, undecompressable (a bad CRC)
+    and malformed all collapse to None: there is no way to render half a part,
+    and doc_parser's contract is that an unreadable document degrades rather than
+    raises. A broken numbering or styles part then costs only the list styling,
+    not the document's text.
     """
     assert _xml_fromstring is not None
     if member not in zf.namelist():
         return None
-    data = _read_zip_entry(zf, member)
-    if data is None:
-        return None
     try:
-        return _xml_fromstring(data)
+        data = _read_zip_entry(zf, member)
+        return None if data is None else _xml_fromstring(data)
     except Exception:
         logger.warning("unreadable OOXML part: %s", member, exc_info=True)
         return None
@@ -435,7 +500,7 @@ def _docx_para_runs(para: Any, budget: _Budget) -> list[Block]:
         else:
             runs.append((bold, italic, [text]))
         chars += len(text)
-        if chars > budget.chars_left or len(runs) > budget.nodes_left:
+        if not budget.fits(chars, len(runs)):
             # Past the boundary: this paragraph will be refused whole, so refuse
             # it now -- the same charge, with the same exhaustion -- instead of
             # building the rest of it first.
@@ -507,7 +572,7 @@ def _table_block(table: Any, out: list[Block], budget: _Budget) -> None:
         # the silent omission this docstring exists to prevent.
         if not cells:
             continue
-        texts = [_cell_text(cell) for cell in cells[:MAX_TABLE_COLS]]
+        texts = [_cell_text(cell) for cell in cells[: budget.max_cols]]
         if block is None:
             block = {"type": "table", "rows": [texts], "truncated_cols": False}
             if not budget.emit(out, block, "".join(texts), len(texts) + 1):
@@ -516,7 +581,7 @@ def _table_block(table: Any, out: list[Block], budget: _Budget) -> None:
             block["rows"].append(texts)
         else:
             return
-        if len(cells) > MAX_TABLE_COLS:
+        if len(texts) < len(cells):
             # Recorded ON THE TABLE, not on the document. The document-level flag
             # says "only the beginning of this document", which describes running
             # out of budget part-way through; dropping right-hand columns from a
