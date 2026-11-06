@@ -836,7 +836,7 @@ Its contract:
 - **Every refusal is returned, never swallowed**, and the refused reference keeps its original markup so the path stays visible in the message. A file dropped in silence leaves a reply that talks about a picture with no picture and no explanation — the defect this module exists to prevent. This holds for a per-file-cap refusal too, so a channel with a low ceiling never has to drop an already-stripped file after the fact.
 - **Caps bound work, not just output.** `max_files` counts references *examined*, so a reply full of unreadable paths cannot drive unbounded filesystem work or an unbounded rejection list. `max_total_bytes` is handed to the read itself, so an oversize file is refused rather than allocated, and `max_file_bytes` narrows that same read when a channel's ceiling is lower.
 
-`test/test_outbound_files.py` pins each contract item above. Discord, Teams, Slack, Telegram, Webex and WhatsApp are routed onto it (`files_outbound=True`; see Discord's upload half below and "Teams' file halves"); Feishu, iMessage, WeCom and Weixin keep `files_outbound=False` and print paths. An adopter may be NARROWER than this module — Teams accepts only the raster subtypes it can render inline — but the one contract item it may not restate is the refusal: a reference this module accepted and the channel then cannot send must still be reported, and the path must still be visible.
+`test/test_outbound_files.py` pins each contract item above. Discord, Teams, Slack, Telegram, Webex, WhatsApp and Feishu are routed onto it (`files_outbound=True`; see Discord's upload half below, "Teams' file halves" and the Feishu channel section); iMessage, WeCom and Weixin keep `files_outbound=False` and print paths. An adopter may be NARROWER than this module — Teams accepts only the raster subtypes it can render inline — but the one contract item it may not restate is the refusal: a reference this module accepted and the channel then cannot send must still be reported, and the path must still be visible.
 
 `iter_local_refs(text) -> list[LocalRef]` is the scan both consumers share — every complete reference decidable from the text alone (inline-code and fenced ones, malformed markup and remote/`data:` destinations already excluded). Which destinations those are is `is_remote_destination(dest)`, shared with `image_artifacts` so the two directions cannot disagree about one string: `//host/share/...` is BOTH a protocol-relative URL and, on Windows, the only spelling of a UNC path a markdown destination can carry, which is what a roaming profile's data home produces for its own stored attachments. It is treated as local exactly where `hooks.unc_probe_allowed` — the lexical allowlist the filesystem gate in `local_destination` already applies — admits it, and stays remote everywhere else, POSIX included. `open_ref_start(text)` reports where markup OPENS and never closes, and `protected_ref_spans(text)` is the union of the two: the single answer to "where is image markup", used by the rotation guard and by `hide_local_refs(text) -> str`, the text-only cut a streaming channel uses to keep markup off live frames. An unterminated opener owns the rest of the text, because a buffer chunked while the reply is still arriving legitimately ends mid-markup — protecting only complete references is what lets a cut bisect `![alt](` and lose the attachment. `hide_local_refs` is deliberately more permissive than `extract_local_refs`: a reference it hides but extraction then rejects reappears in the sealed message, which is the safe direction; the reverse would flash a path and vanish.
 
@@ -6962,7 +6962,7 @@ restart step, and shows only when the card does not (`jwt_available` false while
 module that is not PyJWT; or an older gateway). There is no Install button.
 
 Feishu capabilities: `streaming=False`, `edit=False`, `reactions=False`,
-`files_inbound=True`, `files_outbound=False`, `rich_blocks=False`,
+`files_inbound=True`, `files_outbound=True`, `rich_blocks=False`,
 `threads=False`, `max_message_chars=4000`, `max_buttons=0`,
 `supports_proactive_send=True`.
 
@@ -7042,7 +7042,9 @@ SEL-audited (`source="feishu"`). The Feishu app needs
 `im:message:send_as_bot` to reply and to send unprompted, and
 `im:message:readonly` to download a
 message's files; enabling groups additionally needs
-`im:message.group_at_msg.include_bot:readonly`. The broad `im:message` grant
+`im:message.group_at_msg.include_bot:readonly`, and sending an answer's images
+needs `im:resource` (without it the upload is refused and the follow-up names
+the path). The broad `im:message` grant
 alone does not activate p2p event delivery in the current Feishu console.
 Group-chat access is an explicit opt-in gated on BOTH `allow_group=True` AND
 the group's `chat_id` appearing in
@@ -7093,6 +7095,25 @@ fail-closed). The dispatcher runs decider-less (no interactive buttons); an
 one reply on `on_done` — no streaming, no edit-in-place. Because nothing is shown
 before `on_done`, an UNFINISHED `[OPTIONS` tail is kept rather than cut: there is
 no partial frame for it to flash in, so it can only be the assistant's own prose.
+
+**Outbound images.** `on_done` runs the answer through the shared
+`extract_local_refs_off_loop` before the send-boundary redaction, rooted at the
+provider's own `cwd` plus its `work_scratch_dir` (bound by the dispatcher's
+`bind_provider`, so the first turn of a session has a root too), with Feishu's
+limits (10 MB per image, ten per answer). Uploads are on only for a `p2p` turn
+that the shared `uploads_restricted` ceiling allows: a group's members are not
+all on `allowed_open_ids`, so a group turn keeps the path, as a Webex space does.
+The text reply goes first (none when the answer was only images); then each
+extracted image is uploaded with `im.v1.image.create` (`image_type=message`) and
+sent as its own `msg_type=image` reply to the same inbound message
+(`LarkClient.send_image_reply`). A refused reference keeps its markup plus a
+`⚠️ [<dest> — not sent: <detail>]` line (three at most, then a count); an image
+whose upload or reply fails is named by path in one follow-up, best-effort after
+delivered text and raising when it is the only thing the answer would deliver. A
+text reply that fails still raises before any image is sent. Refusals and admitted
+uploads are SEL-audited as `feishu_renderer.upload_files` with reason codes and
+counts only. The ceiling reads the durable privacy flags through the dispatcher's
+`dashboard_state`, which `maybe_start_feishu` sets.
 
 **Session identity.** A p2p turn keys on `open_id` under the `DIRECT` chat
 type; a group turn keys on the group's `chat_id` under the non-direct

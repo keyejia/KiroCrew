@@ -39,7 +39,8 @@ suggests.
 **Sends a file back to you** is what you receive from `file_send`. On WeCom the
 file arrives as a document (`send_document`), but an inline image reference in a
 reply is not uploaded: it keeps printing its path, so WeCom's `files_outbound`
-declaration stays off.
+declaration stays off. Feishu is the reverse: an inline image reference in a
+reply arrives as an image message, but `file_send` has no Feishu leg.
 
 **Tappable choices** is the total number of interactive options one prompt may
 present. Above the cap, the remainder degrades to a numbered list in the message
