@@ -27,6 +27,7 @@ import { COMPOSER_ROW_SPRING, ComposerSizer } from './chat-input/ComposerSizer'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { useComposerSpellcheck } from '../hooks/useComposerSpellcheck'
 import { useComposerInlineMarkdown } from '../hooks/useComposerInlineMarkdown'
+import { useComposerArrowKeyHistory } from '../hooks/useComposerArrowKeyHistory'
 import { useComposerSendMode } from '../hooks/useComposerSendMode'
 import TrustDropdown from './TrustDropdown'
 import { useIsMobile } from '../hooks/useIsMobile'
@@ -256,7 +257,7 @@ function ChatInput({
   projectBranch,
   projectDetached,
   memoryMode,
-  sentMessages,
+  sentMessages: sentMessagesProp,
   onEditLastRequest,
   onAutomationClick,
   automation,
@@ -385,6 +386,9 @@ function ChatInput({
   // render site of this component honours it and none can forget to pass it.
   const spellCheck = useComposerSpellcheck()
   const inlineMarkdown = useComposerInlineMarkdown()
+  // With ↑/↓ recall turned off, neither composer engine is handed the sent
+  // prompts, so the keys only move the caret.
+  const sentMessages = useComposerArrowKeyHistory() ? sentMessagesProp : undefined
   // Live markdown styling needs rich text, which a textarea cannot draw, so the
   // Style Markdown While Typing setting also opts this user into the Lexical
   // composer. With the setting off (the default) the textarea path is unchanged.
