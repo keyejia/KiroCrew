@@ -92,6 +92,12 @@ class ToolHookResult:
     #: both alike. The action alone cannot say which branch produced it, and a
     #: result built outside the factory stays unproven (False) — fail-closed.
     read_only: bool = False
+    #: True on a TOOL_ALLOW that only a PERSON may answer: no auto-approve path
+    #: may approve it. ``permission_floor.refusal_for`` refuses it for an
+    #: auto-approve consumer, and the dashboard skips every auto-approve rung for
+    #: it. Set by the ``spec-shell-denylist`` row when a spec's ``deniedCommands``
+    #: entry cannot be checked (:meth:`ask_human`).
+    human_only: bool = False
     #: The ``GATE_TIERS`` row that decided, stamped by ``HookManager.judge`` -- the
     #: per-target rule's name for a per-target tier (``"sensitive-bash"``, the same
     #: name the denial differential reports). ``""`` when no tier decided (the
@@ -145,6 +151,12 @@ class ToolHookResult:
         answering the prompt; it decides nothing."""
         ToolHookResult._count(TOOL_ALLOW, False)
         return ToolHookResult(action=TOOL_ALLOW, reason=note)
+
+    @staticmethod
+    def ask_human(note: str) -> ToolHookResult:
+        """The call asks, and only a person may answer it (:attr:`human_only`)."""
+        ToolHookResult._count(TOOL_ALLOW, False)
+        return ToolHookResult(action=TOOL_ALLOW, reason=note, human_only=True)
 
     @staticmethod
     def auto_approve(*, identity_grant: bool = False, read_only: bool = False) -> ToolHookResult:

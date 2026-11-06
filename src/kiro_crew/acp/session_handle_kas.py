@@ -279,6 +279,9 @@ def _handle_kas_update(
             self.kas_crew_answered = switched_crew_answered(registered, mode_id)
             self.kas_crew_answered_commands = switched_crew_answered_commands(registered, mode_id)
             self.kas_spec_shell_allowlist = switched_shell_allowlist(registered, mode_id)
+            from kiro_crew.acp.kas_shell_denylist import switched_shell_denylist
+
+            self.kas_spec_shell_denylist = switched_shell_denylist(registered, mode_id)
             self.kas_spec_write_allowlist = switched_write_allowlist(
                 registered, mode_id, getattr(self, "_bound_cwd", "")
             )

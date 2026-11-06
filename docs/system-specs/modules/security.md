@@ -2637,6 +2637,34 @@ gate's fall-through `allow` carries `COMPOSITION_NOTICE` as its reason and the
 dashboard shows it ahead of the card; under `denyByDefault` the refusal names the
 composition instead of saying no entry matches. The note decides nothing.
 
+**KAS spec shell denylist (`deniedCommands`)** (`spec-shell-denylist` row,
+`platform/spec_shell_denylist.py`) — the KAS translation carries a
+`deniedCommands` entry as an engine rule only when it is a literal plus `.*`, so a
+regex entry used to reach the session with no rule and ran unprompted under an
+auto-approve policy. The projection now records EVERY entry as written under the
+Crew-only `_crewShellDenylist` key; the session handle stamps them on its own
+agent's requests (`AcpEvent.spec_shell_denylist`), and the row refuses a shell
+call an entry matches. Matching mirrors kiro-cli, which compiles each entry as
+`\A{entry}\z` and matches the command: the entry must match the WHOLE command,
+and Crew also matches it against every piece the command chains, pipes,
+backgrounds or substitutes (split at `&& || ; | & $( \` ( ) { }` and newlines,
+quoted or not), so it never refuses less. An entry is read first by
+`allowed_commands.parse` (linear); otherwise it is the user's own pattern,
+compiled from the spec at runtime with Python's `re` and fullmatched, leading
+`(?imsx)` flags kept in front. A `deny_policy`, so it holds on every approval
+policy, `AUTO_APPROVE` included (`permission_floor.refusal_for`). An entry nobody
+can evaluate (it fails to compile, uses syntax Rust refuses or reads differently:
+look-around, backreferences, possessive or atomic groups, `[:class:]`, or is not a
+string) keeps every shell call for a PERSON (`ToolHookResult.ask_human`,
+`human_only`): `permission_floor` refuses it for an auto-approve consumer, the
+shared approver refuses it with no approver and marks it `AcpEvent.needs_person`
+otherwise (the gateway approver then skips trust, YOLO and per-source shortcuts),
+and the dashboard skips every auto-approve rung, so it asks interactively and never
+runs unattended. kiro-cli itself treats such an entry as deny-all. The KAS rules
+the translation carries are unchanged. The session-start notice names each entry
+KAS did not receive and says Crew enforces it, or that the agent's shell commands
+ask.
+
 **KAS spec shell allowlist (`denyByDefault`)** — a spec that sets
 `toolsSettings.shell.denyByDefault` (either shell key; any value but `false`) has
 its usable `allowedCommands` recorded as the agent's shell allowlist

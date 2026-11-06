@@ -133,6 +133,10 @@ def refusal_for(
     except Exception:
         logger.warning("tool gate could not be consulted for a permission request", exc_info=True)
         return REASON_GATE_UNAVAILABLE
+    if decision.action == hooks_mod.TOOL_ALLOW and decision.human_only and not security_only:
+        # An auto-approve consumer has no person to ask: a call only a person may
+        # answer is refused, never approved by default.
+        return decision.reason or "Blocked: only a person may approve this call"
     if decision.action != hooks_mod.TOOL_DENY:
         return None
     if security_only and not decision.security_deny:

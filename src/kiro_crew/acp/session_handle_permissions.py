@@ -712,6 +712,7 @@ def _build_permission_event(self: AcpSessionHandle, msg: JsonRpcMessage) -> AcpE
         event.spec_granted_builtins = frozenset(getattr(self, "kas_crew_answered", ()))
         event.spec_granted_commands = tuple(getattr(self, "kas_crew_answered_commands", ()))
         event.spec_shell_allowlist = getattr(self, "kas_spec_shell_allowlist", None)
+        event.spec_shell_denylist = getattr(self, "kas_spec_shell_denylist", None)
         event.spec_write_allowlist = getattr(self, "kas_spec_write_allowlist", None)
         event.spec_write_cwd = str(getattr(self, "_bound_cwd", "") or "")
     return event

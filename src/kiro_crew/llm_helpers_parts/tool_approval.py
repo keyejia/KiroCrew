@@ -27,6 +27,7 @@ from kiro_crew.deny_notice import steer_refusal_notice
 from kiro_crew.executors import run_in_tool_gate_pool
 from kiro_crew.hooks import (
     _EDIT_TOOL_KIND,
+    TOOL_ALLOW,
     _normalize_tool_name,
     hook_gate_kwargs,
     title_is_trusted_mcp_identity,
@@ -698,6 +699,14 @@ async def _resolve_permission(
             await _steer_host_deny(provider, event, tool_result.reason, cause=DENY_CAUSE_POLICY)
             await provider.reject_tool(event.request_id)
             return False
+        if tool_result.action == TOOL_ALLOW and tool_result.human_only:
+            # Only a person may approve this call (a spec deny Crew cannot check).
+            if on_tool_approval is None:
+                _log("rejected", metadata={"reason": "needs_person_headless_reject"})
+                await _steer_host_deny(provider, event, tool_result.reason, cause=DENY_CAUSE_POLICY)
+                await provider.reject_tool(event.request_id)
+                return False
+            event.needs_person = True
         if tool_result.action == TOOL_AUTO_APPROVE:
             if policy == ToolApprovalPolicy.READ_ONLY and not tool_result.read_only:
                 # READ_ONLY honours the classifier's verdict alone, and the
