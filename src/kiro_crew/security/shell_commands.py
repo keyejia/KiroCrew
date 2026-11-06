@@ -187,6 +187,7 @@ def read_commands(
     stop = ""
     in_redirect = False
     expansion: list[str] = []  # closers of open ``${…}`` / ``$[…]``
+    arith = 0  # open parens of a ``((…))`` / ``$((…))``, where ``<<`` is a shift
     pos, state = 0, 0
     pending: list[list] = []  # [owner index or None, tag, strip tabs, quoted] per ``<<``
 
@@ -207,8 +208,13 @@ def read_commands(
             at = _base + pos + step.offset
             dollars = dollars + 1 if step.active and step.char == "$" else 0
             live_syntax = step.active and not expansion
+            if step.active and step.char == "(" and (arith or text.startswith("((", step.offset)):
+                arith += 1  # a shift reads on, so a misread errs toward more commands
+            elif step.active and step.char == ")" and arith:
+                arith -= 1
             near = text[max(step.offset - 1, 0) : step.offset + 3]  # ``<<<`` takes one word
-            if live_syntax and text.startswith("<<", step.offset) and "<<<" not in near:
+            shift = heredocs and arith
+            if live_syntax and not shift and text.startswith("<<", step.offset) and "<<<" not in near:
                 if not heredocs:
                     stop = "<<"
                     break

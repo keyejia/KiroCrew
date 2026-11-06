@@ -58,6 +58,11 @@ class TestReader:
         argvs = [a for a, _ in _docs("cat <<EOF\nit's $(id; who) and `date`\nEOF")]
         assert argvs[:4] == ["cat", "id", "who", "date"]
 
+    def test_a_shift_in_arithmetic_is_not_a_heredoc(self):
+        assert _docs("x=$((1<<2))\nnext")[-1] == ("next", [])
+        assert _docs("((1<<2))\nnext")[-1] == ("next", [])
+        assert all(not d for _, d in _docs("echo $(( (1)<<2 ))\nnext"))
+
     def test_an_unclosed_body_runs_to_the_end(self):
         assert _docs("bash <<EOF\nA") == [("bash", [("A", False)]), ("", [])]
 
@@ -97,6 +102,10 @@ class TestReader:
         pytest.param(f"bash -ce +c '{ROOT}'", id="option-cluster-after-c"),
         pytest.param(f"echo hi # x\\\nbash -c '{ROOT}'", id="comment-ending-in-backslash"),
         pytest.param(f"echo hi &# \\\nbash -c '{ROOT}'", id="background-comment-backslash"),
+        # ``<<`` inside arithmetic is a shift, so the next line is a command
+        pytest.param(f"x=$((1<<2))\n{HOME}", id="shift-in-arith-expansion"),
+        pytest.param(f"((1<<2))\n{HOME}", id="shift-in-arith-command"),
+        pytest.param(f"((1<<2)) && bash <<EOF\n{ROOT}\nEOF", id="heredoc-after-arith"),
     ],
 )
 def test_the_floor_refuses(cmd):
@@ -128,6 +137,8 @@ def test_the_floor_refuses(cmd):
         pytest.param(
             f'cat <<\'bash -c "{ROOT}"\'\nhello\nbash -c "{ROOT}"', id="tag-spells-a-wipe"
         ),
+        pytest.param("echo $((1<<2))", id="arith-shift-alone"),
+        pytest.param(f"x=$((1<<2)); cat <<'EOF'\n{ROOT}\nEOF", id="heredoc-after-arith-data"),
     ],
 )
 def test_the_floor_allows_body_data(cmd):
