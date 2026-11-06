@@ -249,6 +249,16 @@ describe('focus mode — macOS window drag strip', () => {
       nextFrame()
       expectOneFullStrip()
 
+      // Across the scroller's top edge (a tall disclosure card): the part in the
+      // band is clipped, so it is covered too.
+      const across = document.createElement('div')
+      across.tabIndex = 0
+      box(across, 0, 1400, 20, 300)
+      await act(async () => { main.appendChild(across) })
+      nextFrame()
+      expectOneFullStrip()
+      await act(async () => { across.remove() })
+
       // In a fixed layer inside the scroller (an expanded widget): not clipped.
       const layer = document.createElement('div')
       layer.style.position = 'fixed'
@@ -258,6 +268,37 @@ describe('focus mode — macOS window drag strip', () => {
       await act(async () => { main.appendChild(layer) })
       nextFrame()
       expect(expectStripsClear(600, 700)).toHaveLength(2)
+    })
+
+    // Peeked in focus mode the opaque header overlays the content column, so a
+    // column control under it (the chat title overlay's buttons) cannot be
+    // clicked and must not cut the header's strips. One outside the column
+    // still does.
+    it('lets the peeked header cover content-column controls under it', async () => {
+      renderWithProviders(<App />, { route: '/chat' })
+      const toggle = await screen.findByTestId('focus-mode-toggle')
+      await act(async () => { fireEvent.click(toggle) })
+      vi.useFakeTimers()
+      try {
+        fireEvent.mouseEnter(screen.getByTestId('focus-peek-top'))
+        act(() => { vi.advanceTimersByTime(150) })
+        const main = document.getElementById('main-content') as HTMLElement
+        box(main, 0, 1400, 0, 900)
+        const under = document.createElement('button')
+        box(under, 600, 700, 4, 30)
+        await act(async () => { main.appendChild(under) })
+        act(() => { vi.advanceTimersToNextFrame() })
+        expectOneFullStrip()
+
+        const drawer = document.createElement('button')
+        box(drawer, 1000, 1100, 4, 30)
+        await act(async () => { document.body.appendChild(drawer) })
+        act(() => { vi.advanceTimersToNextFrame() })
+        expect(expectStripsClear(1000, 1100)).toHaveLength(2)
+        drawer.remove()
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     // In focus mode the shell's grid gives #main-content an 8px top row, so the
