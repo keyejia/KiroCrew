@@ -98,6 +98,29 @@ def test_slack_only_path_also_gets_a_standing_grant() -> None:
     assert so.is_permanent is True
 
 
+def test_gateway_approval_yolo_arms_the_dashboard_grant() -> None:
+    """``gateway --approval yolo`` auto-approves dashboard chats for the whole launch."""
+    state = _make_state()
+    with patch("kiro_crew.safety_override.sel"):
+        _apply_startup_yolo(state, _cfg(yolo=False), approval_mode="yolo")
+
+    assert state.is_yolo_active() is True
+    assert safety_override().is_permanent is True
+    assert safety_override()._source == "cli"
+
+
+def test_gateway_approval_yolo_is_refused_when_policy_denies_yolo() -> None:
+    """An ``approval_modes`` deny of ``yolo`` still refuses the flag's grant."""
+    state = _make_state()
+    with (
+        patch("kiro_crew.safety_override.sel"),
+        patch("kiro_crew.safety_override_grant.yolo_policy_permits", return_value=False),
+    ):
+        _apply_startup_yolo(state, _cfg(yolo=False), approval_mode="yolo")
+
+    assert state.is_yolo_active() is False
+
+
 def test_apply_startup_yolo_noop_when_config_false() -> None:
     """No declaration means no override at startup."""
     state = _make_state()

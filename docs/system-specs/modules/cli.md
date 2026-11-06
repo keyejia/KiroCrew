@@ -3105,3 +3105,11 @@ non-default path.** The flag disables every per-call approval, so pointing it at
 real data home would let a test drive an operator's live sessions and credentials.
 The guard is a startup refusal rather than a warning because a warning in CI output
 is not read.
+
+Background turns read the flag on each approval. Dashboard chats read the
+process-wide safety override instead, so `start_dashboard` arms it at startup from
+the flag (`_apply_startup_yolo`, audited as source `cli`) through the declared grant
+`agent.dangerouslySkipPermissions` uses: no expiry unless the `yolo_duration` scope
+or `yolo_max_seconds` bounds it, and refused when an `approval_modes` policy denies
+`yolo`. That policy, and picking another mode in the dashboard, change dashboard
+chats only: background turns keep following the flag while the gateway runs.
