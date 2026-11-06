@@ -9,6 +9,9 @@ const { unrecoverableGatewayDialog } = require("../../gateway-recovery");
 // dialog), so a tick this size costs nothing while still landing the retry
 // within seconds of the last part arriving.
 const INSTALLING_PROBE_MS = 5_000;
+// How long an unchanged probe result reads as stuck rather than still extracting:
+// the dialog's own text tells the user to quit and reopen after five minutes.
+const INSTALLING_STALL_MS = 5 * 60_000;
 // How long the dialog shows "Installation finished" before it closes itself.
 // Painting and closing in the same tick would give the line at most one frame.
 const INSTALLING_COMPLETE_LINGER_MS = 700;
@@ -91,9 +94,13 @@ function createFailureDialog({
     // refusal-time text: Reveal Log closes and reopens this dialog through the
     // caller's loop, and the hoisted message would paint the original count
     // again after the probe had already shown it falling.
+    let openingProbe;
     const opening = typeof autoRetryProbe === "function"
       ? (() => {
-        try { return nextInstallingDialogState(autoRetryProbe(), { pruned: prunedBackend }); }
+        try {
+          openingProbe = autoRetryProbe();
+          return nextInstallingDialogState(openingProbe, { pruned: prunedBackend });
+        }
         catch { return null; }
       })()
       : null;
@@ -273,6 +280,15 @@ function createFailureDialog({
       };
       if (typeof autoRetryProbe === "function") {
         let paintedMessage = message;
+        let paintedTitle = title;
+        // Counted in ticks, so the injected interval is the only clock. The
+        // stall latches: once escalated, the copy stays until the tree is complete.
+        // shortcut: the count is per dialog, so a Reveal Log reopen restarts it and
+        // costs at most five more minutes of the installing copy; keep it in the
+        // createFailureDialog closure if users report reopening into that.
+        let lastProbeKey = JSON.stringify(openingProbe);
+        let unchangedTicks = 0;
+        let stalled = false;
         probeTimer = setIntervalFn(() => {
           if (errorWindow.isDestroyed() || quitting() || getInstallingUpdate()) {
             stopProbe();
@@ -280,10 +296,29 @@ function createFailureDialog({
           }
           let state;
           try {
-            state = nextInstallingDialogState(autoRetryProbe(), { pruned: prunedBackend });
+            const result = autoRetryProbe();
+            const key = JSON.stringify(result);
+            unchangedTicks = key === lastProbeKey ? unchangedTicks + 1 : 0;
+            lastProbeKey = key;
+            if (unchangedTicks * INSTALLING_PROBE_MS >= INSTALLING_STALL_MS) stalled = true;
+            state = nextInstallingDialogState(result, { pruned: prunedBackend, stalled });
           } catch (probeError) {
             glog(`install probe failed (${probeError && probeError.message}); will probe again`);
             return;
+          }
+          if (!state.complete && state.title !== paintedTitle) {
+            paintedTitle = state.title;
+            // The escalated copy asks for Quit, so the accent and Enter move to
+            // Quit, as a pruned opening places them.
+            errorWindow.webContents
+              .executeJavaScript(
+                `document.querySelector(".title").textContent = ${JSON.stringify(state.title)};`
+                + " for (const b of document.querySelectorAll('button')) {"
+                + " if (b.getAttribute('onclick') === \"act('retry')\") b.className = 'cancel';"
+                + " if (b.getAttribute('onclick') === \"act('quit')\") b.className = 'ok'; }"
+                + " primaryAct = \"act('quit')\";",
+              )
+              .catch(() => { /* window closing under the paint */ });
           }
           if (state.complete) {
             // Stop before closing: the closed handler also stops, but a tick

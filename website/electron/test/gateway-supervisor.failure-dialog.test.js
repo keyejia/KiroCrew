@@ -23,6 +23,7 @@ const {
   OWN_GATEWAY_COMMAND,
   INSTALLING_PROBE_MS,
   INSTALLING_COMPLETE_LINGER_MS,
+  INSTALLING_STALL_MS,
   fakeDialogWindows,
 } = require("./gateway-supervisor-test-helpers");
 
@@ -768,6 +769,38 @@ test("installing dialog re-probes the bundle and repaints the falling count", as
   assert.strictEqual(dialog.destroyed, false);
   assert.strictEqual(spawnCalls.length, 0, "no retry while a part is still missing");
   assert.strictEqual(timers.intervals.length, 1, "the probe keeps running");
+});
+
+// A bundle that never completes must not promise an automatic start forever:
+// five minutes of an unchanged probe result escalates to the "app files
+// missing" copy with Quit accented, and the probe still retries if parts land.
+test("installing dialog escalates after five unchanged minutes and still retries on completion", async () => {
+  const { dialog, timers, files, spawnCalls, connected } = await installingDialogHarness({
+    missing: ["zoneinfo"],
+  });
+  const stallTicks = INSTALLING_STALL_MS / INSTALLING_PROBE_MS;
+  const titlePaints = () => dialog.scripts.filter((js) => js.startsWith('document.querySelector(".title")'));
+  for (let i = 1; i < stallTicks; i += 1) timers.tick(INSTALLING_PROBE_MS);
+  assert.deepStrictEqual(dialog.paintedMessages(), [], "one tick short of the window, nothing escalates");
+  assert.deepStrictEqual(titlePaints(), []);
+
+  timers.tick(INSTALLING_PROBE_MS);
+  assert.match(dialog.paintedMessages().at(-1), /^Some of Kiro Crew's app files were removed/);
+  const escalated = titlePaints().at(-1) || "";
+  assert.match(escalated, /app files missing/);
+  assert.match(escalated, /act\('quit'\)"\) b\.className = 'ok'/, "Quit takes the accent");
+  assert.match(escalated, /primaryAct = "act\('quit'\)"/, "Enter presses Quit");
+  assert.strictEqual(dialog.destroyed, false);
+  assert.strictEqual(spawnCalls.length, 0);
+  assert.strictEqual(timers.intervals.length, 1, "the probe stays armed");
+
+  files.add(`${BUNDLE_LIB}/zoneinfo/__init__.py`);
+  timers.tick(INSTALLING_PROBE_MS);
+  assert.match(dialog.paintedMessages().at(-1), /Installation finished/);
+  assert.match(titlePaints().at(-1), /installation finished/);
+  timers.fire(INSTALLING_COMPLETE_LINGER_MS);
+  await connected;
+  assert.strictEqual(spawnCalls.length, 1, "the retry spawned exactly once");
 });
 
 // Reveal Log resolves the dialog and the caller's loop reopens it with the
