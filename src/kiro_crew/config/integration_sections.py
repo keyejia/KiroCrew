@@ -1091,36 +1091,6 @@ class TunnelConfig:
             restart=True,
         ),
     )
-    relay_host_url: str = field(
-        default="",
-        metadata=_meta(
-            "Relay Host URL",
-            "The relay's host dial URL. Empty means the relay address from the lease "
-            "service; with no lease service it must be set. Must be wss:// (ws:// only "
-            "for a loopback test relay).",
-            restart=True,
-        ),
-    )
-    relay_crew_domain: str = field(
-        default="",
-        metadata=_meta(
-            "Relay Crew Domain",
-            "The domain this Crew's relay URL sits under, as https://<endpoint>.<domain>. "
-            "Empty means the relay address from the lease service; with no lease service "
-            "it must be set.",
-            restart=True,
-        ),
-    )
-    relay_move_grace_seconds: float = field(
-        default=1.0,
-        metadata=_meta(
-            "Relay Move Grace (secs)",
-            "When the relay moves this Crew to a new connection, how long the old one "
-            "stays open with no request in flight before it closes, so a request already "
-            "on its way there is still answered. 0 to 30.",
-            restart=True,
-        ),
-    )
     relay_lease_url: str = field(
         default="",
         metadata=_meta(

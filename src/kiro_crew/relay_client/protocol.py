@@ -66,10 +66,7 @@ DRAIN_BACKSTOP_SECONDS = 90.0
 #: After a move, the old connection stays open until no request has arrived on it
 #: for this long with none in flight: a request the relay wrote there just before
 #: it stopped routing to it can still be on its way. Never past the drain backstop.
-#: Provisional, so it is the setting ``tunnel.relay_move_grace_seconds``.
 MOVE_QUIET_GRACE_SECONDS = 1.0
-#: The largest ``tunnel.relay_move_grace_seconds`` accepts.
-MOVE_QUIET_GRACE_MAX_SECONDS = 30.0
 
 # ── sizes (contract section 3, fixture limits/sizes.json) ──
 MAX_TEXT_FRAME_BYTES = 65536

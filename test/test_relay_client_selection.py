@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -53,13 +54,14 @@ def _cfg(**tunnel: object) -> KiroCrewConfig:
 
 #: Reserved example names for a relay with no lease service, which must name both.
 _NAMED = {
-    "relay_host_url": "wss://host-us-east-1.relay.example/v1/host",
-    "relay_crew_domain": "us-east-1.relay.example",
+    "host_url": "wss://host-us-east-1.relay.example/v1/host",
+    "crew_domain": "us-east-1.relay.example",
 }
 
 
-def _named_cfg(**tunnel: object) -> KiroCrewConfig:
-    return _cfg(**{**_NAMED, **tunnel})
+def _named(**settings: Any) -> RelaySettings:
+    """Settings as an edition with its own host token source builds them."""
+    return RelaySettings(**{"enabled": True, **_NAMED, **settings})
 
 
 class _EditionTunnel(DefaultTunnelProvider):
@@ -115,10 +117,10 @@ class TestSelection:
 
 class TestSettings:
     def test_no_relay_name_is_built_in(self) -> None:
-        # Empty stays empty: the names come from the lease answer or the settings.
+        # Empty stays empty: the names come from the lease answer or an edition.
         settings = RelaySettings.from_config(_cfg())
         assert settings.host_url == "" and settings.crew_domain == ""
-        with pytest.raises(RelaySettingsError, match="tunnel.relay_crew_domain"):
+        with pytest.raises(RelaySettingsError, match="relay Crew domain"):
             settings.crew_url_for("k7qm3x2vtzr4hbn6cwapfe5dj3")
 
     def test_with_a_lease_service_the_names_may_stay_empty(self) -> None:
@@ -127,68 +129,53 @@ class TestSettings:
         ).validate()
 
     @pytest.mark.parametrize(
-        ("tunnel", "names"),
+        ("names", "missing"),
         [
-            ({}, "tunnel.relay_host_url"),
-            ({"relay_host_url": "wss://host-us-east-1.relay.example/v1/host"}, "relay_crew_domain"),
-            ({"relay_crew_domain": "us-east-1.relay.example"}, "tunnel.relay_host_url"),
+            ({"host_url": "", "crew_domain": ""}, "relay host URL"),
+            ({"crew_domain": ""}, "relay Crew domain"),
+            ({"host_url": ""}, "relay host URL"),
         ],
         ids=["neither", "no-domain", "no-host-url"],
     )
     def test_without_a_lease_service_an_empty_name_is_refused_by_name(
-        self, tunnel: dict, names: str
+        self, names: dict, missing: str
     ) -> None:
-        with pytest.raises(RelaySettingsError, match=names):
-            RelaySettings.from_config(_cfg(**tunnel)).validate()
+        with pytest.raises(RelaySettingsError, match=missing):
+            _named(**names).validate()
 
     def test_explicit_names_win(self) -> None:
-        settings = RelaySettings.from_config(
-            _cfg(
-                relay_host_url="wss://relay.beta.example/v1/host",
-                relay_crew_domain="crews.beta.example",
-            )
+        settings = _named(
+            host_url="wss://relay.beta.example/v1/host", crew_domain="crews.beta.example"
         )
+        settings.validate()
         assert settings.host_url == "wss://relay.beta.example/v1/host"
         assert settings.crew_url_for("e" * 20) == f"https://{'e' * 20}.crews.beta.example"
 
     @pytest.mark.parametrize(
-        "tunnel",
+        "names",
         [
-            {"relay_host_url": "ws://relay.example/v1/host"},
-            {"relay_host_url": "https://relay.example/v1/host"},
-            {"relay_crew_domain": "bad domain"},
+            {"host_url": "ws://relay.example/v1/host"},
+            {"host_url": "https://relay.example/v1/host"},
+            {"crew_domain": "bad domain"},
         ],
         ids=["clear-text-remote", "not-websocket", "bad-domain"],
     )
-    def test_unusable_settings_are_refused(self, tunnel: dict) -> None:
+    def test_unusable_settings_are_refused(self, names: dict) -> None:
         with pytest.raises(RelaySettingsError):
-            RelaySettings.from_config(_cfg(**tunnel)).validate()
+            _named(**names).validate()
 
     def test_a_loopback_test_relay_may_use_ws(self) -> None:
-        RelaySettings.from_config(
-            _cfg(relay_host_url="ws://127.0.0.1:9/v1/host", relay_crew_domain="relay.example")
-        ).validate()
-
-    def test_config_json_round_trip(self, tmp_path, monkeypatch) -> None:
-        config_file = tmp_path / "config.json"
-        config_file.write_text(
-            json.dumps(
-                {"tunnel": {"relay_enabled": True, "relay_crew_domain": "eu.relay.example"}}
-            ),
-            encoding="utf-8",
-        )
-        monkeypatch.setattr("kiro_crew.config.loader.config_path", lambda: config_file)
-        cfg = KiroCrewConfig.load()
-        assert cfg.tunnel.relay_enabled is True
-        assert cfg.tunnel.relay_crew_domain == "eu.relay.example"
-        assert cfg.tunnel.relay_host_url == ""
+        _named(host_url="ws://127.0.0.1:9/v1/host", crew_domain="relay.example").validate()
 
     @pytest.mark.parametrize(
         "old",
         [
             {"relay_region": "eu-central-1"},
+            {"relay_host_url": "wss://host-us-east-1.relay.example/v1/host"},
+            {"relay_crew_domain": "us-east-1.relay.example"},
+            {"relay_move_grace_seconds": 4.0},
         ],
-        ids=["region"],
+        ids=["region", "host-url", "crew-domain", "move-grace"],
     )
     def test_an_old_config_naming_a_removed_key_loads_and_keeps_it(
         self, tmp_path, monkeypatch, caplog, old: dict
@@ -219,44 +206,8 @@ class TestSettings:
         monkeypatch.setattr("kiro_crew.config.loader.config_path", lambda: config_file)
         assert KiroCrewConfig.load().tunnel.relay_enabled is False
 
-    def test_the_move_grace_defaults_to_one_second(self) -> None:
-        assert KiroCrewConfig().tunnel.relay_move_grace_seconds == 1.0
+    def test_the_move_grace_is_one_second(self) -> None:
         assert RelaySettings.from_config(KiroCrewConfig()).move_grace == 1.0
-
-    @pytest.mark.parametrize(
-        ("stored", "grace"),
-        [
-            (2.5, 2.5),
-            (0, 0.0),
-            (-1, 0.0),
-            (120, 30.0),
-            ("2", 2.0),
-            ("soon", 1.0),
-            (True, 1.0),
-            (None, 1.0),
-        ],
-        ids=[
-            "number",
-            "zero",
-            "negative",
-            "past-the-window",
-            "numeric-string",
-            "string",
-            "boolean",
-            "null",
-        ],
-    )
-    def test_the_move_grace_reads_only_a_number_up_to_the_move_window(
-        self, tmp_path, monkeypatch, stored, grace
-    ) -> None:
-        config_file = tmp_path / "config.json"
-        config_file.write_text(
-            json.dumps({"tunnel": {"relay_move_grace_seconds": stored}}), encoding="utf-8"
-        )
-        monkeypatch.setattr("kiro_crew.config.loader.config_path", lambda: config_file)
-        cfg = KiroCrewConfig.load()
-        assert cfg.tunnel.relay_move_grace_seconds == grace
-        assert RelaySettings.from_config(cfg).move_grace == grace
 
     @pytest.mark.asyncio
     async def test_the_provider_hands_the_move_grace_to_the_client(self) -> None:
@@ -266,11 +217,7 @@ class TestSettings:
             made.append(kwargs)
             raise RuntimeError("stop here")
 
-        settings = RelaySettings.from_config(
-            _named_cfg(
-                relay_enabled=True, relay_move_grace_seconds=4.0
-            )  # flake-ok: a settings value parsed and handed on, never waited on
-        )
+        settings = _named(move_grace=4.0)  # flake-ok: a settings value handed on, never waited on
         provider = RelayTunnelProvider(
             settings, ingress_factory=MagicMock, client_factory=factory  # type: ignore[arg-type]
         )
@@ -315,9 +262,7 @@ class TestSettings:
             async def aclose(self) -> None:
                 closed.append("ingress")
 
-        settings = RelaySettings.from_config(
-            _named_cfg(relay_enabled=True, relay_host_url="ws://127.0.0.1:9/v1/host")
-        )
+        settings = _named(host_url="ws://127.0.0.1:9/v1/host")
         provider = RelayTunnelProvider(
             settings,
             token_source=_Tokens(HostCredential(TOKEN, crew_kind="personal", owner_user_id=OWNER)),
@@ -392,7 +337,7 @@ class TestSettings:
 
 
 def _provider(relay: FakeRelay, crew: FakeCrew) -> RelayTunnelProvider:
-    settings = RelaySettings.from_config(_named_cfg(relay_enabled=True, relay_host_url=relay.url))
+    settings = _named(host_url=relay.url)
     credential = HostCredential(TOKEN, crew_kind="personal", owner_user_id=OWNER)
     return RelayTunnelProvider(
         settings,
@@ -503,7 +448,7 @@ class TestThroughTheTunnelWrapper:
         monkeypatch.setenv("KIROCREW_BOUND_PORT", "6123")
         monkeypatch.delenv("KIROCREW_BOUND_HOST", raising=False)
         monkeypatch.setattr(provider_mod, "_gateway_ingress", RelayIngress(enabled=True))
-        provider = RelayTunnelProvider(RelaySettings.from_config(_named_cfg(relay_enabled=True)))
+        provider = RelayTunnelProvider(_named())
         await provider.start()
         try:
             await async_wait_until(
@@ -515,15 +460,11 @@ class TestThroughTheTunnelWrapper:
             await provider.stop()
 
     async def test_unusable_settings_report_an_error_and_start_nothing(self) -> None:
-        provider = RelayTunnelProvider(
-            RelaySettings.from_config(
-                _named_cfg(relay_enabled=True, relay_host_url="ws://relay.example/v1")
-            )
-        )
+        provider = RelayTunnelProvider(_named(host_url="ws://relay.example/v1"))
         await provider.start()
         snapshot = provider.status_snapshot()
         assert snapshot is not None and snapshot["state"] == "error"
-        assert "relay_host_url" in snapshot["error"]
+        assert "relay host URL" in snapshot["error"]
         await provider.stop()
 
     async def test_without_the_dashboards_relay_ingress_it_starts_nothing(
@@ -533,7 +474,7 @@ class TestThroughTheTunnelWrapper:
 
         monkeypatch.setenv("KIROCREW_BOUND_PORT", "6123")
         monkeypatch.setattr(provider_mod, "_gateway_ingress", None)
-        provider = RelayTunnelProvider(RelaySettings.from_config(_named_cfg(relay_enabled=True)))
+        provider = RelayTunnelProvider(_named())
         await provider.start()
         snapshot = provider.status_snapshot()
         assert snapshot is not None and snapshot["state"] == "error"
