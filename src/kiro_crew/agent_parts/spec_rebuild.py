@@ -869,6 +869,10 @@ def rebuild_agent_config(
             path, unreadable, refresh_forks, clean=clean, wrote_out=_wrote_out, held_out=_held_out
         )
     logger.info("Installed agent config: %s", path)
+    from kiro_crew import mcp_dropped_servers
+
+    # After the write landed, so the record describes the spec now on disk.
+    mcp_dropped_servers.record_rebuild_drops(resolved.unresolved_commands)
     _note_main_spec_readable(path, episode_revision)
     _claim_propagated_model(config, main_name)
     if guide_grant_pending:
