@@ -4678,6 +4678,8 @@
       "total": "Total",
       "trust_reads": "Trust read-only commands",
       "turn_interrupted_press_resume": "Last turn was interrupted — press Resume, or just type",
+      "turn_interrupted_restored_queue_one": "Last turn was interrupted — Resume runs it. {{count}} queued message waits for you to send it.",
+      "turn_interrupted_restored_queue_other": "Last turn was interrupted — Resume runs it. {{count}} queued messages wait for you to send them.",
       "upload_file": "Upload file",
       "use_a_skill": "Use a skill",
       "used": "Used",

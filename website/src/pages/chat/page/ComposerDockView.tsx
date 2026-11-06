@@ -762,6 +762,7 @@ export default function ComposerDockView({
                  button; typing still works. */
               continuable={continuable && interrupted && !cardOwnsRecovery}
               continueIsRecovery={interrupted}
+              restoredQueueCount={queuedMessages.filter(m => m.meta?.restored === true).length}
               onContinue={handleContinue}
               continuing={continuing}
               onStop={stopTurn}

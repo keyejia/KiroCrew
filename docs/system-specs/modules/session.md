@@ -4396,7 +4396,12 @@ so absence clears it.
 - **Restored entries are handed back as queue CARDS, not dispatched.** Nothing
   drains an idle slot on boot, so the user sends, edits or deletes them. This is
   the same rule `sendTurn.ts` follows for an indeterminate send: a prompt whose
-  turn may have run un-persisted must never be auto-resent.
+  turn may have run un-persisted must never be auto-resent. Resume on an
+  interrupted slot runs only that turn and leaves the cards waiting, so while the
+  main chat or a split pane offers Resume over restored cards, the composer
+  placeholder says how many wait to be sent (`turn_interrupted_restored_queue`).
+  A crewmate's chat (no cards, only bubbles) and the crew window (read-only
+  cards) keep the plain Resume hint, since neither lets the user send a card.
 - **Durability does not depend on the mutation site.** `_queue_persisted_sig`
   records what the last committed save wrote and `slot.queue_persist_pending`
   compares it against the live queue, so an in-place rewrite — a reorder, a

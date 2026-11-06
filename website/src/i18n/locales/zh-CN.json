@@ -6595,6 +6595,7 @@
       "tree_drop_folder_refused": "无法添加此文件夹：其路径包含空格或 @。请改为逐个添加其中的文件。",
       "trust_reads": "信任只读命令",
       "turn_interrupted_press_resume": "上一轮被中断 — 点“恢复”，或直接输入",
+      "turn_interrupted_restored_queue_other": "上一轮被中断 — “恢复”会运行它。{{count}} 条排队消息等你发送。",
       "upload_file": "上传文件",
       "use_a_skill": "使用技能",
       "used": "已用",

@@ -6776,6 +6776,8 @@
       "tree_drop_folder_refused": "Dieser Ordner kann nicht hinzugefügt werden: Sein Pfad enthält ein Leerzeichen oder @. Füge stattdessen seine Dateien einzeln hinzu.",
       "trust_reads": "Nur-Lese-Befehlen vertrauen",
       "turn_interrupted_press_resume": "Letzter Zug wurde unterbrochen – „Wieder aufnehmen“ drücken oder einfach tippen",
+      "turn_interrupted_restored_queue_one": "Letzter Zug wurde unterbrochen – „Wieder aufnehmen“ führt ihn aus. {{count}} Nachricht in der Warteschlange wartet darauf, dass du sie sendest.",
+      "turn_interrupted_restored_queue_other": "Letzter Zug wurde unterbrochen – „Wieder aufnehmen“ führt ihn aus. {{count}} Nachrichten in der Warteschlange warten darauf, dass du sie sendest.",
       "upload_file": "Datei hochladen",
       "use_a_skill": "Einen Skill verwenden",
       "used": "Verbraucht",
