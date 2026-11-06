@@ -162,6 +162,8 @@ interface Props {
   /** Where a path chip in the rendered preview opens a file (the side panel's own
    *  open action), so the chip's "Click to open" does what it says. */
   onFileOpen?: (path: string, opts?: { line?: number; endLine?: number }) => void
+  /** The ⋯ menu's Pop out to window row: open this file in its own window. */
+  onPopout?: () => void
 }
 
 import { type PierreEditorHandle, type RevealTarget } from '../pierre'
@@ -232,7 +234,7 @@ export interface MarkdownPanelHandle {
   requestNavigate: (nav: (stillClean: () => boolean) => void) => void
 }
 
-export default memo(forwardRef<MarkdownPanelHandle, Props>(function MarkdownPanel({ filePath, content, binary, partial, placeholder, onContentChange, onDiskContent, onSave, onClose, liveWatch, onSubmitComments, connected = true, onRefresh, reserveWidth, initialDiffMode, readOnly = false, onDiffModeChange, embedded, active = true, savedBaseline, revealLine, onRevealConsumed, browserRail, railOpen, onRailToggle, scrollMemoryKey, onFolderOpen, onFileOpen }: Props, ref) {
+export default memo(forwardRef<MarkdownPanelHandle, Props>(function MarkdownPanel({ filePath, content, binary, partial, placeholder, onContentChange, onDiskContent, onSave, onClose, liveWatch, onSubmitComments, connected = true, onRefresh, reserveWidth, initialDiffMode, readOnly = false, onDiffModeChange, embedded, active = true, savedBaseline, revealLine, onRevealConsumed, browserRail, railOpen, onRailToggle, scrollMemoryKey, onFolderOpen, onFileOpen, onPopout }: Props, ref) {
   useLanguageGeneration() // memo() bails out of the provider-level repaint; subscribe directly
   const ime = useImeGuard()
   const qc = useQueryClient()
@@ -1411,6 +1413,7 @@ export default memo(forwardRef<MarkdownPanelHandle, Props>(function MarkdownPane
             <OverflowMenu filePath={filePath} content={content} onError={reportActionError} onDownload={lastCopy ? downloadLastCopy : undefined}
               onRefresh={handleRefresh} refreshDisabled={refreshing || dirty} refreshTitle={dirty ? i18nT('components.markdownPanel.save_or_discard_changes_first') : i18nT('components.markdownPanel.refresh_file_re_read_from_disk')}
               onFullscreen={() => { void guardDraft(() => setFullscreen(f => !f)) }} fullscreen={fullscreen}
+              onPopout={onPopout} popoutDisabled={dirty}
               onSnapshot={artifactState.existing && !showBinaryCard ? handleSnapshot : undefined} snapshotting={artifactState.snapshotting}
               wordWrap={wordWrap} onToggleWordWrap={() => setWordWrap(!wordWrap)}
               lineNums={lineNums} onToggleLineNums={() => setLineNums(!lineNums)}
