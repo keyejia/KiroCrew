@@ -20,6 +20,7 @@ from typing import Any
 
 from kiro_crew import cron_script
 from kiro_crew.cron_service.execution import _SUBPROC_CLEANUP_ALLOWANCE_SECS
+from kiro_crew.cron_service.identity import agent_sequence_dispatches
 from kiro_crew.cron_service.model import (
     _ALERT_AFTER_DEFAULT,
     _AUTO_PAUSE_THRESHOLD,
@@ -112,6 +113,16 @@ def cron_session_cwd(job: CronJob, resolved_cwd: str | None) -> str | None:
 _CHAT_FOLDER_NEEDS_PERSISTENT = (
     "Filing runs into a chat folder needs a persistent session: a stateless job "
     "has no job-wide tab to file. Clear the chat folder, or keep the session."
+)
+
+_NEW_CHAT_PER_RUN_NEEDS_STATELESS = (
+    "A new chat per run needs a fresh session per run: set persistent_session "
+    "to false, or turn new_chat_per_run off."
+)
+
+_NEW_CHAT_PER_RUN_AGENT_ONLY = (
+    "A new chat per run applies to a single-agent (message) job: a script, "
+    "command or multi-agent job never opens a chat tab."
 )
 
 # Table-driven string-field caps for the persistence chokepoint. Every
@@ -282,6 +293,7 @@ def build_job(
     skip_dates: list[str] | None = None,
     strict_schedule: bool = False,
     hide_in_chat: bool = False,
+    new_chat_per_run: bool = False,
     folder_id: str = "",
     chat_folder_id: str = "",
     project_path: str = "",
@@ -363,6 +375,10 @@ def build_job(
     )
     if chat_folder_id and not persistent_session:
         raise ValueError(_CHAT_FOLDER_NEEDS_PERSISTENT)
+    if new_chat_per_run and persistent_session:
+        raise ValueError(_NEW_CHAT_PER_RUN_NEEDS_STATELESS)
+    if new_chat_per_run and (command or script or agent_sequence_dispatches(agent_sequence or [])):
+        raise ValueError(_NEW_CHAT_PER_RUN_AGENT_ONLY)
     if project_path and (command or script):
         raise ValueError(_PROJECT_PATH_AGENT_ONLY)
     project_path = resolve_project_path(project_path)
@@ -416,6 +432,7 @@ def build_job(
         skip_dates=skip_dates,
         strict_schedule=strict_schedule,
         hide_in_chat=hide_in_chat,
+        new_chat_per_run=bool(new_chat_per_run),
         folder_id=folder_id,
         chat_folder_id=chat_folder_id,
         project_path=project_path,
@@ -469,6 +486,16 @@ def apply_job_update(
         kwargs.get("persistent_session", job.persistent_session)
     ):
         raise ValueError(_CHAT_FOLDER_NEEDS_PERSISTENT)
+    # A per-run tab needs a per-run session. Refused only when this request
+    # names the switch on; re-persisting a per-run job turns it off below.
+    if bool(kwargs.get("new_chat_per_run")) and bool(
+        kwargs.get("persistent_session", job.persistent_session)
+    ):
+        raise ValueError(_NEW_CHAT_PER_RUN_NEEDS_STATELESS)
+    if bool(kwargs.get("new_chat_per_run")) and (
+        job.command or job.script or agent_sequence_dispatches(job.agent_sequence)
+    ):
+        raise ValueError(_NEW_CHAT_PER_RUN_AGENT_ONLY)
     if (
         "cron_expr" in kwargs
         and kwargs["cron_expr"]
@@ -647,6 +674,11 @@ def apply_job_update(
         job.minimal_context = bool(kwargs["minimal_context"])
     if "hide_in_chat" in kwargs:
         job.hide_in_chat = bool(kwargs["hide_in_chat"])
+    if "new_chat_per_run" in kwargs:
+        job.new_chat_per_run = bool(kwargs["new_chat_per_run"])
+    elif job.persistent_session:
+        # One shared session again: every run lands in the job's one tab.
+        job.new_chat_per_run = False
     if "folder_id" in kwargs:
         job.folder_id = kwargs["folder_id"] or ""
     if "chat_folder_id" in kwargs:

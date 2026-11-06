@@ -214,6 +214,13 @@ def _list_tools() -> list[dict[str, Any]]:
                         "avoids unbounded context growth. Set True (or omit) for "
                         "conversational reminders that should remember prior runs.",
                     },
+                    "new_chat_per_run": {
+                        "type": "boolean",
+                        "description": "When true, every run opens its own dashboard chat "
+                        "tab on its own fresh session, so the user can review that run and "
+                        "reply to it alone (default false). Implies persistent_session false "
+                        "when that is omitted. Agent crons only; hide_in_chat still wins.",
+                    },
                     "minimal_context": {
                         "type": "boolean",
                         "description": "When true, skip memory, lessons, skills, and "
@@ -363,6 +370,12 @@ def _list_tools() -> list[dict[str, Any]]:
                     "persistent_session": {
                         "type": "boolean",
                         "description": "Whether this cron reuses one agent session across runs.",
+                    },
+                    "new_chat_per_run": {
+                        "type": "boolean",
+                        "description": "When true, every run opens its own chat tab on its "
+                        "own fresh session. Turning it on implies persistent_session false "
+                        "when that is omitted; persistent_session true turns it off.",
                     },
                     "minimal_context": {
                         "type": "boolean",

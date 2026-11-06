@@ -126,6 +126,12 @@ def _history_key_for(slot_key: str) -> str:
     return f"dashboard:{slot_key}"
 
 
+def cron_tab_name(session_key: str) -> str:
+    """The tab that shows a cron session: ``cron:<id>`` is ``cron-<id>``, the
+    job's one tab, and a per-run ``cron:<id>:<run>`` is ``cron-<id>-<run>``."""
+    return "cron-" + session_key.removeprefix("cron:").replace(":", "-")
+
+
 def dashboard_slot_key(session_key: str) -> str:
     """The dashboard slot name displaying *session_key*, or ``""`` if none.
 
@@ -151,8 +157,12 @@ def dashboard_slot_key(session_key: str) -> str:
         # for stateless jobs, ``cron:<job_id>:<agent>`` for agent sequences —
         # while the surface registry only ever holds the slot's linked key
         # (``cron:<job_id>``), so the surface gate is checked against both
-        # spellings. Whichever matched, the displaying tab is the job's own.
+        # spellings. Whichever matched, the displaying tab is the job's own --
+        # unless a ``new_chat_per_run`` run has a tab of its own, linked to its
+        # exact key and named by :func:`cron_tab_name`.
         job_id = session_key.removeprefix("cron:").split(":", 1)[0]
+        if session_key != f"cron:{job_id}" and has_dashboard_surface(session_key):
+            return _normalize_slot_key(cron_tab_name(session_key))
         if not (has_dashboard_surface(session_key) or has_dashboard_surface(f"cron:{job_id}")):
             return ""
         return _normalize_slot_key(f"cron-{job_id}")
