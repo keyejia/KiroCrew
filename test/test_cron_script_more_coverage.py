@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -966,6 +967,66 @@ class TestPathAndSecretResolution:
 
         assert os.path.realpath(resolved) == os.path.realpath(str(script))
         assert func == "run"
+
+    @staticmethod
+    def _homes(tmp_path, monkeypatch, data_home: Path) -> None:
+        """Point ``~`` at a scratch user home and ``KIROCREW_HOME`` at *data_home*."""
+        for var in ("HOME", "USERPROFILE"):
+            monkeypatch.setenv(var, str(tmp_path / "user"))
+        monkeypatch.setenv("KIROCREW_HOME", str(data_home))
+        (data_home / "crons").mkdir(parents=True)
+
+    def test_the_documented_tilde_spelling_names_the_configured_data_home(
+        self, tmp_path, monkeypatch
+    ):
+        """``~/.kiro/crew/`` in a spec follows ``KIROCREW_HOME``, still held to ``crons/``."""
+        data_home = tmp_path / "data-home"
+        self._homes(tmp_path, monkeypatch, data_home)
+        script = data_home / "crons" / "job.py"
+        script.write_text("def run(ctx): pass\n", newline="\n")
+        (data_home / "loose.py").write_text("def run(ctx): pass\n", newline="\n")
+        missing = re.escape(str((data_home / "crons" / "missing.py").resolve()))
+
+        with pytest.raises(FileNotFoundError, match=missing):
+            resolve_script_path("~/.kiro/crew/crons/missing.py:run")
+        resolved = resolve_script_path("~/.kiro/crew/crons/job.py:run")
+        assert resolved == (str(script.resolve()), "run")
+        assert resolve_script_path("~/.kiro/crew/crons/job.py:run", allow_bundle_roots=True) == (
+            resolved
+        )
+        with pytest.raises(PermissionError, match="Script must be under"):
+            resolve_script_path("~/.kiro/crew/loose.py:run")
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="a directory symlink needs a privilege on Windows"
+    )
+    def test_a_data_home_nested_under_the_default_keeps_its_full_spelling(
+        self, tmp_path, monkeypatch
+    ):
+        """Kept even when ``~`` is a link: the override resolves, the expansion does not."""
+        (tmp_path / "real-user").mkdir()
+        (tmp_path / "user").symlink_to(tmp_path / "real-user", target_is_directory=True)
+        data_home = tmp_path / "user" / ".kiro" / "crew" / "dev"
+        self._homes(tmp_path, monkeypatch, data_home)
+        script = data_home / "crons" / "job.py"
+        script.write_text("def run(ctx): pass\n", newline="\n")
+
+        resolved, _func = resolve_script_path("~/.kiro/crew/dev/crons/job.py:run")
+
+        assert Path(resolved) == script.resolve()
+
+    def test_a_data_home_above_the_default_still_takes_the_documented_spelling(
+        self, tmp_path, monkeypatch
+    ):
+        """``KIROCREW_HOME=~/.kiro`` reads ``~/.kiro/crew/crons/`` as its own ``crons/``."""
+        data_home = tmp_path / "user" / ".kiro"
+        self._homes(tmp_path, monkeypatch, data_home)
+        script = data_home / "crons" / "job.py"
+        script.write_text("def run(ctx): pass\n", newline="\n")
+
+        resolved, _func = resolve_script_path("~/.kiro/crew/crons/job.py:run")
+
+        assert Path(resolved) == script.resolve()
 
     def test_internal_secret_prefers_the_environment(self, monkeypatch):
         monkeypatch.setenv("KIROCREW_INTERNAL_SECRET", "env-secret")
