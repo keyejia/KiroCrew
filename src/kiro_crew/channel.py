@@ -179,6 +179,9 @@ CHANNEL_AGENT_BLOCKED_TOOLS: tuple[str, ...] = (
     # Recoloring a session acts on a session the channel agent would name from
     # thread text other people wrote; same containment reason as stop.
     "session_set_color",
+    # A note writes text into another session's transcript and next turn; same
+    # containment reason as stop.
+    "session_set_note",
     # Reload relaunches another session's agent process; same containment
     # reason as stop.
     "session_reload",
