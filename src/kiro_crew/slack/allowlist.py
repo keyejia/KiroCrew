@@ -15,6 +15,7 @@ gateway restarts.
 from __future__ import annotations
 
 import logging
+import os
 from typing import TYPE_CHECKING
 
 from kiro_crew.config import KiroCrewConfig
@@ -22,6 +23,7 @@ from kiro_crew.config.loader import (
     config_path,
     update_config_locked,
 )
+from kiro_crew.config.loader_credentials import CRED_OWNER_ID
 from kiro_crew.dashboard.origin import (
     dashboard_link_origin,
     devspaces_proxy_url,
@@ -30,6 +32,7 @@ from kiro_crew.dashboard.origin import (
     resolve_dashboard_host,
 )
 from kiro_crew.dashboard.token_auth import LINK_WINDOW_SECS, MAX_SESSION_TTL_SECS, generate_token
+from kiro_crew.dashboard.token_auth_tokens import owner_mint_extra
 from kiro_crew.dashboard.urls import slack_tunnel_opt_in, tunnel_origin_if_opted_in
 from kiro_crew.sel import sel
 from kiro_crew.slack.handler import is_allowed_user, is_tracked_channel
@@ -216,7 +219,12 @@ async def send_dashboard_link(
     local_only = is_local_only(configured_host, True)
     host = resolve_dashboard_host(local_only, configured_host)
 
-    token = generate_token(user_id, session_ttl)
+    # The owner's own link carries the owner-mint claim, so the session can be
+    # told to sign in again once the owner id changes. Allowlisted users' links
+    # stay unmarked and keep the generic denial.
+    owner_id = os.environ.get(CRED_OWNER_ID, "").strip()
+    is_owner = bool(owner_id) and user_id == owner_id
+    token = generate_token(user_id, session_ttl, extra=owner_mint_extra() if is_owner else None)
 
     # Tunnel URL is only used when explicitly opted in via slack.use_tunnel_url
     # (default false until tunnel mechanism is scaled for general use). An
