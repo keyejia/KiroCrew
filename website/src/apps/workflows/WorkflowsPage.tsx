@@ -18,8 +18,10 @@
  */
 import { useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { Workflow as WorkflowIcon, Play, FileCode, ListTree } from 'lucide-react'
-import { PageHeader } from '../../components/ui'
+import { isAppNotEnabledError, toApiError } from '../../api/apiError'
+import { Btn, PageHeader } from '../../components/ui'
 import SegmentedControl from '../../components/SegmentedControl'
 import SimpleSelect from '../../components/SimpleSelect'
 import ErrorNotice from '../../components/ErrorNotice'
@@ -35,12 +37,13 @@ export { groupByPhase, latestBudget }
 export type { WfEvent, AgentRow, PhaseGroup }
 
 // Proxied base for the workflows builtin-app backend (KiroCrew reverse-proxies
-// /apps/workflows/api/* to the app's HTTP server).
+// /apps/workflows/api/* to the app's HTTP server). A refusal throws the shared
+// ApiError, so the page shows the server's sentence and can read its `code`.
 const API_BASE = '/apps/workflows/api'
 
 async function apiGet<T>(path: string): Promise<T> {
   const r = await fetch(`${API_BASE}${path}`, { credentials: 'same-origin' })
-  if (!r.ok) throw new Error(`GET ${path} → ${r.status}`)
+  if (!r.ok) throw await toApiError(r)
   return r.json() as Promise<T>
 }
 
@@ -51,7 +54,7 @@ async function apiPost<T>(path: string, body: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  if (!r.ok) throw new Error(`POST ${path} → ${r.status}`)
+  if (!r.ok) throw await toApiError(r)
   return r.json() as Promise<T>
 }
 
@@ -92,12 +95,21 @@ type WorkflowsView = 'author' | 'runs'
  *  hook keyed on the event list a new identity on every render. */
 const NO_EVENTS: WfEvent[] = []
 
+/** The way from the disabled-app notice to the app's own page under Apps, where it
+ *  is switched on. Not the Apps grid or Library: Workflows is a hidden builtin, so
+ *  neither lists it while it is off. Its own component so `useNavigate` runs only
+ *  while the notice renders. */
+function AppsButton() {
+  const navigate = useNavigate()
+  return <Btn onClick={() => navigate('/apps/detail/workflows')}>{i18nT('components.appHost.apps')}</Btn>
+}
+
 export default function WorkflowsPage() {
   const [view, setView] = useState<WorkflowsView>('author')
   const [source, setSource] = useState<string>(STARTER)
 
   // Shipped example workflows for the author to start from (cached, deduped).
-  const { data: examples = [] } = useQuery({
+  const { data: examples = [], error: examplesError } = useQuery({
     queryKey: ['workflow-examples'],
     queryFn: () => apiGet<ExampleScript[]>('/examples'),
   })
@@ -120,7 +132,14 @@ export default function WorkflowsPage() {
   // concurrent validate+run sequences (duplicate runs). Include the pending
   // validation so the button is disabled for the whole gesture.
   const running = runMutation.isPending || validateMutation.isPending
-  const errText = (e: unknown) => (e ? (e instanceof Error ? e.message : String(e)) : null)
+  // While the app is off the gateway refuses every call to its backend with
+  // `app_not_enabled`. That is a setting, not a failure, so it shows as one
+  // notice in place of each call's error. The examples refusal from opening the
+  // page stops counting once a Validate is answered (Run validates first), since
+  // that answer is newer.
+  const appOff = isAppNotEnabledError(validateMutation.error) || isAppNotEnabledError(runMutation.error)
+    || (isAppNotEnabledError(examplesError) && !validateMutation.isSuccess && !validateMutation.isError)
+  const errText = (e: unknown) => (!e || isAppNotEnabledError(e) ? null : e instanceof Error ? e.message : String(e))
   const error = errText(runMutation.error)
   // The validator's TRANSPORT failure (non-2xx, network), as opposed to its
   // verdict: `validation.ok === false` is a successful request that said no.
@@ -163,6 +182,17 @@ export default function WorkflowsPage() {
       </div>
 
       {view === 'runs' && <WorkflowsRuns />}
+
+      {view === 'author' && appOff && (
+        <div className="px-4 md:px-6 pb-4">
+          {/* No hand-off: the workflow `source` in the editor is unsaved local state. */}
+          <ErrorNotice
+            title={i18nT('components.appHost.this_app_is_disabled')}
+            message={i18nT('components.appHost.enable_this_app_from_apps_to_use_it')}
+            footer={<AppsButton />}
+          />
+        </div>
+      )}
 
       {view === 'author' && (
       <div className="px-4 md:px-6 pb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -224,6 +254,9 @@ export default function WorkflowsPage() {
             messageClassName="font-mono whitespace-pre-line"
           />
           <ErrorNotice title={i18nT('apps.workflows.workflowsPage.couldn_t_validate_the_script')} message={validateError} />
+          {/* The examples list failing to load for any reason but the app being off.
+              No hand-off: the workflow `source` in the editor is unsaved local state. */}
+          <ErrorNotice title={i18nT('apps.workflows.workflowsPage.load_example')} message={errText(examplesError)} />
         </div>
 
         {/* ----- Live run view ----- */}
