@@ -556,8 +556,8 @@ OFF_CARD_SETS: Mapping[str, str] = {
     ),
     "ACP_BACKENDS_SPEC_SERVERS_OFF_WIRE": (
         "which channel carries the agent spec's own servers to the session, read by the "
-        "unresolved-ref detector. The servers arrive either way; a wrong membership is a "
-        "false diagnostic, which is a defect"
+        "unresolved-ref and env-placeholder detectors. The servers arrive either way; a "
+        "wrong membership is a false diagnostic, which is a defect"
     ),
     "ACP_BACKENDS_INLINE_COMPACTION": (
         "whether a manual /compact is awaited or immediate. The user sees /compact "

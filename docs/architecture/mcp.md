@@ -619,6 +619,23 @@ Probes run from `POST /api/mcp/probe`:
   in the probe's spawn. Any other name stays literal, so no other variable's
   value is written into a spec or put on argv; the source `mcp.json` keeps its
   `${HOME}` text.
+- At session start, a stdio server whose `env` references a variable that is not
+  set is named: `acp.mcp_ref_guard.warn_unset_env_placeholders` logs one warning
+  listing each such server and variable, and the session's MCP problem summary
+  carries the same entries (`McpSessionReport.record_env_placeholder_refs`). Names
+  only, never a value: a reference that is not a plain identifier, such as
+  `${NAME:-default}`, is skipped. The server still starts as before, with the
+  literal text, so the names-only summary a spawned run's prompt gets leaves the
+  entry out. "Not set" is judged against the environment that expands the server:
+  a spec server kiro-cli starts itself against the names the launch tail put in
+  the kiro-cli child's environment (`agent.env` and the scrub included, recorded
+  as `_child_env_names`), every other one against `_placeholder_source_env()`,
+  which the routed, KAS and session-array paths expand from. Only the session's
+  spec and array are judged: a spec server when the host mounts the spec's servers
+  itself (`ACP_BACKENDS_SPEC_SERVERS_OFF_WIRE`) and the entry is not muted, or
+  when the array carries it (a routed server rides there as a stub), any other
+  array element on its own. Both composition sites call it, beside the
+  remote-header `secret://` guard it mirrors.
 - A remote server that answers the handshake with `401` — or with `403` carrying a
   `WWW-Authenticate` challenge — and whose sent headers carry no static
   `Authorization` credential gets status `needs_auth` and an empty `error`, not
