@@ -7,10 +7,11 @@ the way the dispatcher drives a subscriber, with a hand-built ``ConfigChange``.
 from __future__ import annotations
 
 import asyncio
+import inspect
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 from _hot_reload_helpers import write_config as _write
@@ -350,6 +351,56 @@ class TestServerAppliers:
         state.push_refresh.assert_called_once_with("config")
 
     @pytest.mark.asyncio
+    async def test_switching_the_terminal_off_ends_every_registered_shell(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``dashboard.terminal.enabled`` going false ends each registered shell at once,
+        rather than leaving it to the orphan sweep, and closes its tab with the
+        shell-exited code; a redial is refused at once despite the 30 s gate cache.
+        Switching it back on ends nothing."""
+        from kiro_crew.dashboard.handlers import terminal
+
+        ws = AsyncMock()
+        ws.closed = False
+        first = terminal._TerminalSession(session_id="s1", master_fd=-1, ws=ws)
+        second = terminal._TerminalSession(session_id="s2", master_fd=-1)
+        registry: dict[str, Any] = {"s1": first, "s2": second, "s3": None}
+        state = SimpleNamespace(
+            workflow_service=None,
+            channel_manager=None,
+            _terminal_sessions=registry,
+            _background_tasks=set(),
+        )
+        subs = self._register(state).values()
+        kill = AsyncMock()
+        monkeypatch.setattr(terminal, "_kill_session", kill)
+        monkeypatch.setattr(terminal, "_enabled_cache", [True, float("inf")])
+        monkeypatch.setattr(terminal, "_get_config", lambda request: {"enabled": False})
+        on, off = KiroCrewConfig(), KiroCrewConfig()
+        off.dashboard.terminal = {"enabled": False}
+
+        async def dispatch(old: KiroCrewConfig, new: KiroCrewConfig) -> None:
+            # As the watcher does: every applier scoped to the changed leaf.
+            change = ConfigChange(
+                old=old, new=new, changed=frozenset({"dashboard.terminal.enabled"})
+            )
+            for sub in subs:
+                if change.touched(*sub.prefixes):
+                    result = sub.callback()(change)
+                    if inspect.isawaitable(result):
+                        await result
+            await asyncio.gather(*state._background_tasks)
+
+        await dispatch(off, on)
+        kill.assert_not_awaited()
+        await dispatch(on, off)
+
+        assert kill.await_args_list == [call(first), call(second)]
+        assert registry == {"s3": None}, "a reservation has no shell to end"
+        ws.close.assert_awaited_once_with(code=4001)
+        assert terminal._is_enabled(object()) is False
+
+    @pytest.mark.asyncio
     async def test_the_provider_switch_runs_off_the_watcher_cycle_exactly_once(self) -> None:
         """``reload_provider_factory`` clears the session registry and then shuts
         the retired providers down one at a time, which can outlast the applier
@@ -455,6 +506,7 @@ class TestServerAppliers:
             "browser.settings",
             "agent.crew_mode_agent",
             "dashboard.feature_previews",
+            "dashboard.terminal.enabled",
         }
         # None of them is a catch-all: an unrelated write must dispatch nothing.
         for sub in subs.values():

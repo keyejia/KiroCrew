@@ -1549,6 +1549,7 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
         _record_orphan_reap,
         _shell_failure_note,
         _sweep_terminals,
+        apply_terminal_enabled,
         reap_orphaned_terminals,
     )
     from kiro_crew.dashboard.handlers.terminal_placement import (  # noqa: F401
@@ -1563,6 +1564,7 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
         _ConptyBackend,
         _enabled_cache,
         _read_terminal_config,
+        _terminal_enabled,
     )
     from kiro_crew.dashboard.handlers.terminal_transport import (  # noqa: F401
         _OWNER_CONTROL_SEND_TIMEOUT_S,
