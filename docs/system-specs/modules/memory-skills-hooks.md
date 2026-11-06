@@ -5834,12 +5834,14 @@ alias was deleted or a symlink retargeted. Repeat calls avoid a re-walk only thr
   - **Ownership.** The fresh inode belongs to the gateway's own uid/gid. An
     unprivileged writer cannot give a file away (`chown` to another user needs
     `CAP_CHOWN`), so a *cross-owned* SKILL.md that the gateway can write changes
-    owner on save. Permission bits and the POSIX ACL are carried, so the effective
-    grant does not widen — the previous owner loses access rather than a new
-    principal gaining it — but the change is real and irreversible by this process.
-  - **A Windows DACL.** The carry is POSIX xattrs only
+    owner on save. Permission bits and the POSIX ACL (on macOS, the extended ACL)
+    are carried, so the effective grant does not widen (the previous owner loses
+    access rather than a new principal gaining it), but the change is real and
+    irreversible by this process.
+  - **A Windows DACL.** The carry covers only POSIX xattrs
     (`ACCESS_CONTROL_XATTRS_SUPPORTED` requires `os.listxattr`/`getxattr`/`setxattr`,
-    which Windows lacks), so on Windows the replacement lands on the DACL it
+    which Windows lacks) and the macOS extended ACL (`macos_acl.copy_extended_acl`,
+    from the pinned descriptor), so on Windows the replacement lands on the DACL it
     inherits from the containing directory rather than the one the replaced file
     carried. A file the operator had tightened *below* its directory's inheritance
     is therefore widened back to it. Closing this needs a `platform_compat`
