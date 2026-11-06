@@ -83,6 +83,8 @@ interface ChatTranscriptViewProps {
   dockH: number
   lastRole: string
   streamTick: number
+  /** `transcriptActivityKey(messages)` while a turn runs, for the footer's stall notice. */
+  footerActivityKey?: string
   toggleAct: () => void
   renderedDisplayItems: DisplayItem[]
   stableMsgKey: (m: ChatMessage) => string
@@ -105,7 +107,7 @@ interface ChatTranscriptViewProps {
 export default function ChatTranscriptView({
   embedded, popout, activeSlot, appToolCallIds, titleInTopbar, workerBreadcrumb = false, activityOpen, completedTurnCount, cursorIsForActiveSlot, kiroCrewVersion, loadingOlder, olderFailed, setTurnDisclosureFor, slotHasMore,
   slotLoading, slotRunning, slotState, environmentStart, slotStopping, slotSwitchTarget, turnDisclosure, turnRowMayBeLive, setInput, isWelcomeState, crewModeOn, openTaskBoard, chatConfig, scrollerRef, bindScroller, handleSurveyLayoutChange,
-  onScrollPin, pinned, approve, dismissApproval, currentSlot, projectDir = null, regenerating, sendUnconfirmed, dockH, lastRole, streamTick, toggleAct, renderedDisplayItems, stableMsgKey, virtualKey, handleLoadEarlier,
+  onScrollPin, pinned, approve, dismissApproval, currentSlot, projectDir = null, regenerating, sendUnconfirmed, dockH, lastRole, streamTick, footerActivityKey, toggleAct, renderedDisplayItems, stableMsgKey, virtualKey, handleLoadEarlier,
   spinnerNearTop, virt, visibleDisplayItems, chatNav, navigateToTurn, turnStepAnnouncement, renderFarmItem, renderMessage, renderTurnItem,
 }: ChatTranscriptViewProps) {
   // This pane shows the chat's transcript once it has loaded rows; a bell note
@@ -224,7 +226,7 @@ export default function ChatTranscriptView({
           scrollerEl={() => scrollerRef.current}
         />
         {/* Footer */}
-        <ChatFooter statusLabel={environmentStart} running={slotRunning || !!currentSlot?.preparing} stopping={slotStopping} state={slotState} lastRole={lastRole} streamTick={streamTick} regenerating={regenerating} stopState={currentSlot?.stop_state} sendUnconfirmed={sendUnconfirmed} browserSessionKey={activeSlot} />
+        <ChatFooter statusLabel={environmentStart} running={slotRunning || !!currentSlot?.preparing} stopping={slotStopping} state={slotState} lastRole={lastRole} streamTick={streamTick} regenerating={regenerating} stopState={currentSlot?.stop_state} sendUnconfirmed={sendUnconfirmed} browserSessionKey={activeSlot} activityKey={footerActivityKey} />
         {activeSlot && !slotLoading && !embedded && !popout && slotSwitchTarget !== activeSlot && (
           <div className="px-4 mx-auto w-full" style={{ maxWidth: 'var(--mc-content-width, 900px)' }}>
             <SessionPulseSurveyCard

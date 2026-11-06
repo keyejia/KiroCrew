@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, it, expect, afterEach, onTestFinished, vi } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
-import ChatFooter, { pickDistinct, resolveLoader, resolveLoaderIcons, SwapCarousel, STREAM_IDLE_MS } from '../pages/chat/ChatFooter'
+import ChatFooter, { pickDistinct, resolveLoader, resolveLoaderIcons, SwapCarousel, STREAM_IDLE_MS, STALL_MS, transcriptActivityKey } from '../pages/chat/ChatFooter'
 import { GHOST_POSE_ICONS, GHOST_POSE_URLS } from '../components/GhostPoses'
 import { registerThemeBranding } from '../themeBranding'
 import { THEME_LOADER_ICONS } from '../themeLoaderIcons'
@@ -506,5 +506,47 @@ describe('pickDistinct', () => {
     const got = pickDistinct(3)
     expect(got).toHaveLength(3)
     expect(new Set(got).size).toBe(3)
+  })
+})
+
+// #10114: a turn whose stream died and one still working looked the same. Once
+// the turn shows nothing new for STALL_MS, the footer says how long it has been.
+describe('ChatFooter stall notice', () => {
+  // The issue's case: the final answer landed in full, the slot still reads running.
+  const quiet = { ...base, running: true, state: 'streaming', lastRole: 'assistant' }
+  const fakeClock = () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-06T12:00:00Z'))
+    onTestFinished(() => { vi.useRealTimers() })
+  }
+
+  it('appears after STALL_MS without activity, ticks, and clears when the turn moves', () => {
+    fakeClock()
+    const { rerender } = render(<ChatFooter {...quiet} activityKey="3:assistant:10" />)
+    act(() => { vi.advanceTimersByTime(STALL_MS - 1000) })
+    expect(screen.queryByTestId('chat-footer-stall')).toBeNull()
+    act(() => { vi.advanceTimersByTime(1000) })
+    // The sentence is the live region; the ticking time is outside it.
+    expect(screen.getByText(/No new output for a while/)).toHaveAttribute('role', 'status')
+    expect(screen.getByTestId('chat-footer-stall-elapsed')).toHaveTextContent('Quiet for 45s')
+    act(() => { vi.advanceTimersByTime(25_000) })
+    expect(screen.getByTestId('chat-footer-stall-elapsed')).toHaveTextContent('Quiet for 1m 10s')
+    rerender(<ChatFooter {...quiet} activityKey="4:streaming:10" />)
+    expect(screen.queryByTestId('chat-footer-stall')).toBeNull()
+  })
+
+  it('stays off while a tool runs, and for a host that passes no activityKey', () => {
+    fakeClock()
+    const { rerender } = render(<ChatFooter {...quiet} state="tool_running" lastRole="tool" activityKey="3:tool:10" />)
+    act(() => { vi.advanceTimersByTime(STALL_MS * 4) })
+    expect(screen.queryByTestId('chat-footer-stall')).toBeNull()
+    rerender(<ChatFooter {...quiet} />)
+    act(() => { vi.advanceTimersByTime(STALL_MS * 4) })
+    expect(screen.queryByTestId('chat-footer-stall')).toBeNull()
+  })
+
+  it('keys on a reasoning burst growing above the trailing streaming row', () => {
+    const rows = (thinking: string) => [{ role: 'user', content: 'q' }, { role: 'thinking', content: thinking }, { role: 'streaming', content: '' }]
+    expect(transcriptActivityKey(rows('abcd'))).not.toBe(transcriptActivityKey(rows('ab')))
   })
 })

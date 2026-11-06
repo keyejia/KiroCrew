@@ -34,7 +34,7 @@ import PaneDim from './PaneDim'
 import PendingQuestionCard from './PendingQuestionCard'
 import QueueStack, { SubagentDeliveryProgress, splitPaneMessages } from './QueueStack'
 import SubagentProgressBar from '../pages/chat/SubagentProgressBar'
-import ChatFooter from '../pages/chat/ChatFooter'
+import ChatFooter, { transcriptActivityKey } from '../pages/chat/ChatFooter'
 import { useChatProjectDir, useEnvironmentStartLabel, useSlotRunsHere } from './sessionEnvironmentHooks'
 import { ChatProjectDirCtx } from './markdown/contexts'
 import PinnedPrompt from '../pages/chat/PinnedPrompt'
@@ -968,6 +968,8 @@ export default function ChatPane({
                           ? (messages[messages.length - 1]?.content.length ?? 0)
                           : 0
                       }
+                      // Not while only preparing a catch-up: that is no turn to stop.
+                      activityKey={running || paneSlot?.running ? transcriptActivityKey(messages) : undefined}
                     />
                     {preparing && !crewmateLive && (
                       <div className="px-4 text-[12px] text-muted" data-testid="chat-pane-preparing-catch-up" role="status">
