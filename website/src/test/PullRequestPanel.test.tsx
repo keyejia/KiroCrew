@@ -1860,3 +1860,79 @@ describe('PullRequestPanel tab keyboard', () => {
     expect(tabs[1]).toHaveFocus()
   })
 })
+
+describe('PullRequestPanel source tab close', () => {
+  it('closes a source tab from its close control without selecting it', async () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <PullRequestPanel
+          sources={[
+            { url: github.url, provider: 'github', number: 12, repo: 'widgets' },
+            { url: gitlab.url, provider: 'gitlab', number: 7, repo: 'service' },
+          ]}
+          selectedUrl={github.url}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('Add source tabs')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close acme/service MR !7' }))
+
+    expect(onDismiss).toHaveBeenCalledWith(gitlab.url)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
+  it('hands the selection and focus to the next tab when the selected tab is closed', async () => {
+    const onSelect = vi.fn()
+    const onDismiss = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <PullRequestPanel
+          sources={[
+            { url: github.url, provider: 'github', number: 12, repo: 'widgets' },
+            { url: gitlab.url, provider: 'gitlab', number: 7, repo: 'service' },
+          ]}
+          selectedUrl={github.url}
+          onSelect={onSelect}
+          onDismiss={onDismiss}
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('Add source tabs')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close acme/widgets PR #12' }))
+
+    expect(onSelect).toHaveBeenCalledWith(gitlab.url)
+    expect(onDismiss).toHaveBeenCalledWith(github.url)
+    expect(screen.getByRole('tab', { name: /MR !7/ })).toHaveFocus()
+  })
+
+  it('keeps the strip for a lone source when its tab can be closed', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <PullRequestPanel
+          sources={[{ url: github.url, provider: 'github', number: 12, repo: 'widgets' }]}
+          selectedUrl={github.url}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('Add source tabs')
+    const strip = screen.getByRole('tablist', { name: 'Pull requests' })
+    expect(within(strip).getByRole('button', { name: 'Close PR #12' })).toBeInTheDocument()
+  })
+
+  it('draws no close control for a host that cannot close tabs', async () => {
+    renderPanel()
+    await screen.findByText('Add source tabs')
+    expect(screen.queryByRole('button', { name: /^Close / })).not.toBeInTheDocument()
+  })
+})

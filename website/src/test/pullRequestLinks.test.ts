@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ChatMessage, ChatSlot } from '../types'
 import {
   adoptSourceSelections,
+  commitDismissedSource,
   commitSourceSelection,
   extractPullRequestLinks,
   isSourceSelectionKey,
   commitRevealedSource,
+  loadDismissedSources,
   loadRevealedSources,
   loadSeenPullRequestLinks,
   loadSourceSelections,
@@ -1211,6 +1213,13 @@ describe('Gerrit hosts', () => {
     expect(extractPullRequestLinks(messages(`Pushed ${CHANGE}.`), [], [], [], [], [GERRIT])).toEqual([LINK])
     expect(parseSourceLinkUrl(`https://${GERRIT}/c/HAL/+/7`, [], [], [], [], [GERRIT]))
       .toEqual({ url: `https://${GERRIT}/c/HAL/+/7`, provider: 'gerrit', number: 7, repo: 'HAL', kind: 'change' })
+  })
+
+  it('keeps a change closed from the Changes strip closed at a later patchset', () => {
+    commitDismissedSource('slot-g', `${CHANGE}/1`, true)
+    const later = parseSourceLinkUrl(`${CHANGE}/2`, [], [], [], [], [GERRIT])!
+    expect(loadDismissedSources('slot-g').has(sourceLinkKey(later))).toBe(true)
+    expect(loadDismissedSources('slot-other').size).toBe(0)
   })
 
   it('does not recognize lookalike, unlisted or malformed links', () => {

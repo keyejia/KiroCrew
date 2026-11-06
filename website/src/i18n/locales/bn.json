@@ -8593,6 +8593,7 @@
       "branch_protection_requirements_approving_reviews": "ব্রাঞ্চ প্রোটেকশনের শর্ত (অনুমোদনকারী রিভিউ বা আবশ্যক চেক) এখনো পূরণ হয়নি।",
       "cancel": "বাতিল",
       "change_number": "চেঞ্জ {{number}}",
+      "close_source_tab": "{{label}} বন্ধ করো",
       "changes": "পরিবর্তন",
       "check_failed": "ব্যর্থ",
       "check_in_progress": "চলমান",

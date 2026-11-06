@@ -8383,6 +8383,7 @@
       "branch_protection_requirements_approving_reviews": "分支保护要求（审批通过的审阅或必需的检查）尚未满足。",
       "cancel": "取消",
       "change_number": "变更 {{number}}",
+      "close_source_tab": "关闭 {{label}}",
       "changes": "变更",
       "check_failed": "失败",
       "check_in_progress": "进行中",

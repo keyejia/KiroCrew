@@ -1171,6 +1171,44 @@ export function commitRevealedSource(
   return safeSetItem(revealedStorageKey(slot, kind), JSON.stringify({ u: url, t: at }))
 }
 
+/** `mc-pr-source-dismissed:<slot>` holds the urls of the pull requests the user
+ *  closed in that session's Changes strip. One key per session, like the stores
+ *  above, so a write never touches another session's list. */
+const DISMISSED_SOURCE_PREFIX = 'mc-pr-source-dismissed:'
+
+/** A session's closed pull requests, `sourceLinkKey` -> url, so a later revision
+ *  of a closed review stays closed. Each stored url is re-parsed like every
+ *  persisted url; anything else reads as not closed. */
+export function loadDismissedSources(slot: string): Map<string, string> {
+  const dismissed = new Map<string, string>()
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(DISMISSED_SOURCE_PREFIX + slot) || '[]')
+    if (!Array.isArray(stored)) return dismissed
+    for (const url of stored.slice(-MAX_PULL_REQUEST_SOURCES)) {
+      const link = typeof url === 'string' ? parseStoredCanonicalLink(url) : null
+      if (link && link.url === url) dismissed.set(sourceLinkKey(link), url)
+    }
+  } catch {
+    // Unreadable storage closes nothing.
+  }
+  return dismissed
+}
+
+/** Close (`dismissed`) or reopen one pull request in a session and return what
+ *  is now closed. Applied to a fresh read, so a second window's closes on the
+ *  same session are kept. */
+export function commitDismissedSource(slot: string, url: string, dismissed: boolean): Map<string, string> {
+  const current = loadDismissedSources(slot)
+  const link = parseStoredCanonicalLink(url)
+  if (!link || link.url !== url) return current
+  const key = sourceLinkKey(link)
+  if (current.has(key) === dismissed) return current
+  if (dismissed) current.set(key, url)
+  else current.delete(key)
+  safeSetItem(DISMISSED_SOURCE_PREFIX + slot, JSON.stringify([...current.values()].slice(-MAX_PULL_REQUEST_SOURCES)))
+  return current
+}
+
 /**
  * Restore the bounded seen-source index used to distinguish live discovery
  * from historical transcript hydration after ChatPage remounts or reloads.
