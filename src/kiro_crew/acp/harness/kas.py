@@ -56,6 +56,11 @@ from kiro_crew.acp.harness.base import (
 )
 from kiro_crew.acp.kas_agents import KasAgentTranslationError
 from kiro_crew.acp.kas_app_identity import resolve_app_identity_launches
+from kiro_crew.acp.kas_engine_features import (
+    MCP_REGISTRY_POINTERS,
+    advertised,
+    mark_registry_pointers,
+)
 from kiro_crew.acp.kas_host_auth import answer_get_access_token, vault_holds_identity_off_loop
 from kiro_crew.acp.kas_tool_limits import with_switched_off_tools
 from kiro_crew.acp.kas_transport import (
@@ -791,6 +796,7 @@ class KasHarness(MembershipHarness):
         crew_panel: bool = False,
         session_key: str = "",
         worker_stub_names: frozenset[str] | None = None,
+        engine_features: frozenset[str] = frozenset(),
     ) -> SessionExtras:
         """Project the agent spec onto KAS, for both session start paths.
 
@@ -956,6 +962,7 @@ class KasHarness(MembershipHarness):
                 session_key=session_key,
                 skill_scope_rules=_skill_scope_rules(agent, spec, prompt_dir, work_dir),
                 withheld_out=withheld,
+                engine_features=engine_features,
             )
             # Every per-tool switch, the global settings file's included: the spec
             # rebuild never copies one onto Crew's own servers. Read here, off the loop.
@@ -1052,14 +1059,20 @@ class KasHarness(MembershipHarness):
         *,
         agent_capabilities: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        """The caller's list, unchanged.
+        """The caller's list, with Crew's own servers marked as registry pointers.
 
         This host reads its own agent spec, so the session-level array is an
         override of same-named entries rather than the whole tool surface, and it
         accepts every transport Crew injects. Returning the same object is what
-        makes the request byte-identical to one built without this seam.
+        makes the request byte-identical to one built without this seam, which it
+        does unless the engine announces registry pointers
+        (:mod:`kas_engine_features`): then each of Crew's launched servers also
+        carries ``_meta.kiro.type: registry``, so a registry-governed account
+        resolves it from its catalog and any other account runs its command.
         """
-        return requested
+        if MCP_REGISTRY_POINTERS not in advertised(agent_capabilities):
+            return requested
+        return mark_registry_pointers(requested, kas_agents_mod.MANAGED_MCP_SERVER_NAMES)
 
     # ── Seam 4: inbound requests the host answers ──
 

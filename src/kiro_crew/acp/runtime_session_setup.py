@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 from kiro_crew import member_essential_context
-from kiro_crew.acp import runtime_start
+from kiro_crew.acp import kas_engine_features, runtime_start
 from kiro_crew.acp.harness import SessionExtras
 from kiro_crew.acp.ipc_pickup import with_ipc_pickups
 from kiro_crew.acp.mcp_mount_check import schedule_mount_check
@@ -395,6 +395,7 @@ async def _kas_custom_agents(
         member_dispatch=member_dispatch,
         crew_panel=crew_panel,
         session_key=session_key,
+        engine_features=kas_engine_features.advertised(getattr(self, "_agent_capabilities", {})),
         **worker,
     )
     # Judged HERE, on the payload, so every path that builds one -- session/new
