@@ -691,7 +691,12 @@ def _url_payload_command(n: int) -> str:
 #: Raised by 34, from 34,699, to the package's measured size on main: the 175 above
 #: were counted on a base without the security fixes that merged before it, so main
 #: landed over budget. No code changes; nothing is relaxed. Re-measured.
-_PACKAGE_LINE_BUDGET = 34_733
+#: Raised by 45, from 34,733: 25 for the prior spellings of the two interpreter-payload
+#: rows in ``_LEGACY_RULE_ID_BY_PATTERN``, so a policy that pinned a row keeps pinning
+#: it, and the catalog comment on why their call names stand bare (both rows match
+#: exactly what they matched), and 20 to the package's measured size on main, which a
+#: tightened git-publish check had left over budget. Nothing is relaxed. Re-measured.
+_PACKAGE_LINE_BUDGET = 34_778
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second
