@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { safeSetItem } from '../utils/safeStorage'
+import { resolveSlotSuccession } from '../utils/slotSuccession'
 import {
   closeSessionTab,
+  loadPinnedSessionTabs,
   loadSessionTabs,
   nextActiveAfterClose,
   openSessionTab,
+  pinnedFirst,
   pruneSessionTabs,
   replaceSessionTab,
+  savePinnedSessionTabs,
   saveSessionTabs,
 } from '../lib/sessionTabs'
 
 export interface SessionTabsApi {
   /** Open sessions in strip order. Length < 2 means the strip does not render. */
   tabs: string[]
+  /**
+   * The pinned tabs (#22775), always at the front of `tabs`. Nothing replaces
+   * a pinned tab's session: an activation that would have, opens beside it.
+   */
+  pinned: string[]
   /**
    * "Look at this tab" — the strip turns it into a brief outline. Carries the
    * time so a repeat on the same key still re-fires.
@@ -39,6 +48,8 @@ export interface SessionTabsApi {
    * resurrected by it. Activation is unchanged.
    */
   reorderTabs: (keys: string[]) => void
+  /** Pin `key`, or unpin it if pinned. */
+  togglePin: (key: string) => void
 }
 
 /** Stable identity so a disabled surface never re-renders on a new empty array. */
@@ -78,9 +89,12 @@ export function useSessionTabs(
   enabled: boolean,
 ): SessionTabsApi {
   const [tabs, setTabs] = useState<string[]>(() => (enabled ? loadSessionTabs(mode, activeSlot) : []))
+  const [pinned, setPinned] = useState<string[]>(() => (enabled ? loadPinnedSessionTabs(mode) : []))
   const [cue, setCue] = useState<{ key: string; at: number } | null>(null)
   const tabsRef = useRef(tabs)
   tabsRef.current = tabs
+  const pinnedRef = useRef(pinned)
+  pinnedRef.current = pinned
   const activeRef = useRef(activeSlot)
   activeRef.current = activeSlot
   const enabledRef = useRef(enabled)
@@ -91,6 +105,19 @@ export function useSessionTabs(
   const prevActiveRef = useRef<string | null>(activeSlot)
 
   useEffect(() => { if (enabled) saveSessionTabs(mode, tabs, safeSetItem) }, [enabled, mode, tabs])
+  useEffect(() => { if (enabled) savePinnedSessionTabs(mode, pinned, safeSetItem) }, [enabled, mode, pinned])
+
+  // A pin outlives its tab only until the set settles: a tab pruned away (or a
+  // stored set that restored without it) must not come back pinned later.
+  // Skipped while the set is empty, which is a cold load before the first
+  // activation, not a set that lost its tabs.
+  useEffect(() => {
+    if (!enabled || tabs.length === 0) return
+    setPinned(prev => {
+      const next = prev.filter(k => tabs.includes(k))
+      return next.length === prev.length ? prev : next
+    })
+  }, [enabled, tabs])
 
   const liveKeys = useMemo(() => new Set(liveSlots.map(s => s.key)), [liveSlots])
 
@@ -108,7 +135,10 @@ export function useSessionTabs(
 
   // Keep the invariant. An activation that is already a tab is just a
   // selection (the strip derives "active" from activeSlot, so there is nothing
-  // to store); one that is not takes over the tab the user was looking at.
+  // to store); one that is not takes over the tab the user was looking at,
+  // unless that tab is pinned, when it opens in a new tab beside it instead.
+  // A memory-mode switch is the exception: its new session SUCCEEDS the old
+  // one (slotSuccession), so it takes over the tab and its pin.
   //
   // FUNCTIONAL update, deliberately. Computing the next set from a snapshot read
   // outside (`tabsRef`) loses any update already queued in the same flush: the
@@ -118,9 +148,13 @@ export function useSessionTabs(
     const prev = prevActiveRef.current
     prevActiveRef.current = activeSlot
     if (!enabled || !activeSlot) return
+    const prevPinned = !!prev && pinnedRef.current.includes(prev)
+    const succeeds = prevPinned && resolveSlotSuccession(prev) === activeSlot
+    if (succeeds) setPinned(p => p.map(k => (k === prev ? activeSlot : k)))
     setTabs(latest => {
       if (latest.includes(activeSlot)) return latest
       if (latest.length === 0) return [activeSlot]
+      if (prevPinned && !succeeds) return pinnedFirst(openSessionTab(latest, activeSlot, prev), pinnedRef.current)
       return replaceSessionTab(latest, prev, activeSlot)
     })
   }, [enabled, activeSlot])
@@ -160,7 +194,7 @@ export function useSessionTabs(
     // just switched to, which puts the tab at the end instead of beside the
     // one the user was on.
     const besideKey = activeRef.current
-    setTabs(current => openSessionTab(current, key, besideKey))
+    setTabs(current => pinnedFirst(openSessionTab(current, key, besideKey), pinnedRef.current))
   }, [])
 
   const closeTab = useCallback((key: string) => {
@@ -179,9 +213,27 @@ export function useSessionTabs(
       if (keys.length !== latest.length) return latest
       const members = new Set(latest)
       if (new Set(keys).size !== keys.length || !keys.every(k => members.has(k))) return latest
-      return keys.every((k, i) => k === latest[i]) ? latest : [...keys]
+      // A drag cannot carry an unpinned tab ahead of a pinned one.
+      const next = pinnedFirst(keys, pinnedRef.current)
+      return next.every((k, i) => k === latest[i]) ? latest : next
     })
   }, [])
 
-  return { tabs: enabled ? tabs : EMPTY_TABS, cue: enabled ? cue : null, openInNewTab, closeTab, reorderTabs }
+  const togglePin = useCallback((key: string) => {
+    if (!enabledRef.current) return
+    const current = pinnedRef.current
+    const next = current.includes(key) ? current.filter(k => k !== key) : [...current, key]
+    setPinned(next)
+    setTabs(latest => pinnedFirst(latest, next))
+  }, [])
+
+  return {
+    tabs: enabled ? tabs : EMPTY_TABS,
+    pinned: enabled ? pinned : EMPTY_TABS,
+    cue: enabled ? cue : null,
+    openInNewTab,
+    closeTab,
+    reorderTabs,
+    togglePin,
+  }
 }
