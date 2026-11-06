@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { markdownToCleanHtml } from '../components/markdown/richTextClipboard'
+import { markdownToCleanHtml, rangeToCleanHtml } from '../components/markdown/richTextClipboard'
 import { copyRichToClipboard } from '../utils/clipboard'
+import { holdVisibleCodeText } from '../utils/visibleText'
+import { setHtml } from './domFixture'
 
 describe('markdownToCleanHtml', () => {
   it('keeps headings, lists, emphasis, code, quotes and links as semantic tags', () => {
@@ -84,6 +86,63 @@ describe('markdownToCleanHtml', () => {
     const html = markdownToCleanHtml('- [x] done\n- [ ] todo')
     expect(html).toContain('<input type="checkbox" checked disabled>')
     expect(html).not.toMatch(/class=/)
+  })
+})
+
+describe('rangeToCleanHtml', () => {
+  let root: HTMLElement
+  beforeEach(() => { root = document.createElement('div'); document.body.append(root) })
+  afterEach(() => root.remove())
+
+  const between = (start: Node, startOffset: number, end: Node, endOffset: number) => {
+    const range = document.createRange()
+    range.setStart(start, startOffset)
+    range.setEnd(end, endOffset)
+    return range
+  }
+  const text = (selector: string, last = false) => {
+    const el = root.querySelector(selector)!
+    return (last ? el.lastChild : el.firstChild)!
+  }
+
+  it('writes only the selected part, with the structure a selection across blocks needs', () => {
+    setHtml(root, '<p class="mb-2">Intro with <strong class="font-bold">bold</strong> and <a class="chip" href="https://example.com/docs">docs</a>.</p><ul><li>first item</li><li>second item</li></ul>')
+    const html = rangeToCleanHtml(root, between(text('p'), 6, text('li:last-child'), 6))
+    expect(html).toBe('<p>with <strong>bold</strong> and <a href="https://example.com/docs">docs</a>.</p><ul><li>first item</li><li>second</li></ul>')
+  })
+
+  it('keeps an empty table cell, so the cells after it stay in their columns', () => {
+    setHtml(root, '<table><thead><tr><th></th><th>Option A</th></tr></thead><tbody><tr><td>Cost</td><td>low</td></tr></tbody></table>')
+    expect(rangeToCleanHtml(root, between(root, 0, text('td:last-child'), 3)))
+      .toBe('<table><thead><tr><th></th><th>Option A</th></tr></thead><tbody><tr><td>Cost</td><td>low</td></tr></tbody></table>')
+  })
+
+  it('a selection inside one block pastes as its inline content', () => {
+    setHtml(root, '<ul><li><p>Use <code>npm test</code> to check</p></li></ul>')
+    expect(rangeToCleanHtml(root, between(text('p'), 0, text('p', true), 3))).toBe('Use <code>npm test</code> to')
+  })
+
+  it('reads the selection as the reader sees it: no hidden text or buttons, a code block its code, a formula its TeX, a closed details its summary', () => {
+    setHtml(root, '<p>Run<span class="sr-only"> secretly</span> this<button>Copy</button>:</p>'
+      + '<div class="code-block"><span>sh</span><pre>highlighted</pre></div>'
+      + '<details><summary>Steps</summary>folded body</details>'
+      + '<p>then <span class="katex"><span class="katex-mathml"><math><semantics><mi>x</mi><annotation encoding="application/x-tex">x^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">x2</span></span> ends</p>')
+    const release = holdVisibleCodeText(root.querySelector('.code-block')!, 'npm test')
+    try {
+      expect(rangeToCleanHtml(root, between(text('p'), 0, text('p:last-child', true), 5))).toBe('<p>Run this:</p><pre><code>npm test</code></pre>Steps<p>then x^2 ends</p>')
+    } finally {
+      release()
+    }
+  })
+
+  it('writes nothing when the selection starts or ends inside a code block, whose drawn code it cannot read', () => {
+    setHtml(root, '<p>Before</p><div class="code-block"><span>sh</span><div class="pierre-surface"></div></div>')
+    const release = holdVisibleCodeText(root.querySelector('.code-block')!, 'npm test')
+    try {
+      expect(rangeToCleanHtml(root, between(text('p'), 2, root.querySelector('.pierre-surface')!, 0))).toBe('')
+    } finally {
+      release()
+    }
   })
 })
 
