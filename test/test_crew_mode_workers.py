@@ -757,7 +757,7 @@ async def test_a_held_steer_is_reported_queued_persisted_and_shown(_open_gate, m
     monkeypatch.setattr(
         chat_delivery, "start_queue_persist", lambda st, sl: persisted.append(sl.key)
     )
-    monkeypatch.setattr(chat_delivery, "warn_if_not_durable", lambda *a: None)
+    monkeypatch.setattr(chat_delivery, "warn_if_not_durable", lambda *a: True)
     monkeypatch.setattr(crew_log_emit, "on_message_queued", lambda *a, **k: None)
     monkeypatch.setattr("kiro_crew.dashboard.relay_archive.is_relay_archive", lambda s: False)
     queue: list[dict[str, Any]] = []

@@ -39,7 +39,7 @@ if TYPE_CHECKING:
         history_corpus_unreadable,
         logger,
         parse_cls_meta,
-        queue_entry_view,
+        queue_view,
         redact_credentials,
         redact_exfiltration_urls,
         remember_unknown_row_fields,
@@ -1295,7 +1295,7 @@ async def api_chat_slot_detail(request: web.Request) -> web.Response:
         )
         tail = json.dumps(
             {
-                "queue": [queue_entry_view(q) for q in queue_snapshot],
+                "queue": queue_view(queue_snapshot),
                 "total": total,
                 **page_fields,
                 # Seeds the context meter on open. Turn-scoped WS frames alone

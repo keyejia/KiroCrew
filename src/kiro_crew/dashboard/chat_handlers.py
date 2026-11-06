@@ -371,6 +371,7 @@ from kiro_crew.dashboard.chat_delivery import (  # noqa: F401
     queue_entry_is_user_origin,
     queue_entry_view,
     queue_for_next_turn,
+    queue_view,
     queued_text_for_display,
     quote_meta,
     start_queue_persist,
