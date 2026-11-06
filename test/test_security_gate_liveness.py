@@ -691,7 +691,9 @@ def _url_payload_command(n: int) -> str:
 #: Raised by 34, from 34,699, to the package's measured size on main: the 175 above
 #: were counted on a base without the security fixes that merged before it, so main
 #: landed over budget. No code changes; nothing is relaxed. Re-measured.
-_PACKAGE_LINE_BUDGET = 34_733
+#: Raised by 10, from 34,733, for ``iter_credential_matches``, the public name of the
+#: linear scan for callers outside the package. No pattern moved; nothing is relaxed.
+_PACKAGE_LINE_BUDGET = 34_743
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second
