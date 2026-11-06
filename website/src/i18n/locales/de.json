@@ -21301,6 +21301,31 @@
     "envOverrideWithSettingRef": "Der Heartbeat ist deaktiviert, weil <settingRef/> in dieser Umgebung gesetzt ist. Entferne die Variable, um Telemetrie hier zu verwalten."
   },
   "settings": {
+    "advanced": {
+      "title": "Alle Einstellungen",
+      "intro": "Ändere hier jede Einstellung, auch solche ohne eigenes Bedienelement. Eine Änderung wird sofort in config.json gespeichert, und „Auf Standard zurücksetzen“ macht sie rückgängig.",
+      "search_placeholder": "Nach Name, Schlüssel oder Beschreibung filtern",
+      "read_only": "Schreibgeschützt",
+      "read_only_tip": "Diese Einstellung legt fest, wer den Agenten erreichen kann, was er ausführen darf, oder einen Schritt, den du sehen musst. Ändere sie auf ihrer eigenen Seite oder in config.json.",
+      "restart": "Gilt nach Neustart",
+      "default_label": "Standard: {{value}}",
+      "current_label": "Aktuell: {{value}}",
+      "saves_now": "Wird sofort gespeichert",
+      "saves_restart": "Wird sofort gespeichert; gilt nach einem Neustart des Gateways",
+      "not_saved": "Nicht gespeichert",
+      "put_back": "Gespeicherten Wert wiederherstellen ({{value}})",
+      "reset": "Auf Standard zurücksetzen",
+      "reset_aria": "{{key}} auf den Standardwert zurücksetzen",
+      "save": "Speichern",
+      "list_hint": "Ein Eintrag pro Zeile",
+      "open_setting": "Eigene Einstellung öffnen",
+      "empty": "Keine Einstellung passt.",
+      "load_error": "Die Einstellungen konnten nicht geladen werden.",
+      "empty_value": "(leer)",
+      "value_on": "Aktiviert",
+      "value_off": "Deaktiviert",
+      "top_level": "Allgemein"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "Dauerhaft nutzt vorhandenes Wissen und speichert neue Erinnerungen. Inkognito nutzt vorhandenes Wissen, speichert aber nichts Neues. Temporär startet ohne Vorwissen und speichert nichts. Jeder Chat bleibt im Verlauf sichtbar. Du kannst den Modus für jeden Chat ändern.",
@@ -21331,6 +21356,10 @@
       "system": "System"
     },
     "tabs": {
+      "advanced": {
+        "description": "Alle Einstellungen, auch solche ohne eigenes Bedienelement",
+        "label": "Erweitert"
+      },
       "about": {
         "description": "Version, Aktualisierungskanal, nach Aktualisierungen suchen und Lizenz",
         "label": "Über"

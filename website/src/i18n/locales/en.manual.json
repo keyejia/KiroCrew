@@ -10117,6 +10117,31 @@
     "envOverrideWithSettingRef": "The heartbeat is off because <settingRef/> is set in this environment. Unset it to manage telemetry here."
   },
   "settings": {
+    "advanced": {
+      "title": "All settings",
+      "intro": "Change any setting here, including ones with no control elsewhere. A change saves to config.json at once, and Reset to default undoes it.",
+      "search_placeholder": "Filter by name, key or description",
+      "read_only": "Read only",
+      "read_only_tip": "This setting decides who can reach the agent, what it may run, or a step you must see. Change it on its own page, or in config.json.",
+      "restart": "Applies after restart",
+      "default_label": "Default: {{value}}",
+      "current_label": "Current: {{value}}",
+      "saves_now": "Saves at once",
+      "saves_restart": "Saves at once; applies after a gateway restart",
+      "not_saved": "Not saved",
+      "put_back": "Restore saved value ({{value}})",
+      "reset": "Reset to default",
+      "reset_aria": "Reset {{key}} to its default",
+      "save": "Save",
+      "list_hint": "One item per line",
+      "open_setting": "Open its setting",
+      "empty": "No setting matches.",
+      "load_error": "Could not load the settings.",
+      "empty_value": "(empty)",
+      "value_on": "Enabled",
+      "value_off": "Disabled",
+      "top_level": "General"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "Persistent uses what it knows and saves new memory. Incognito uses what it knows but saves no new memory. Temporary starts blank and saves no new memory. Every chat still appears in History. You can change the mode for any chat.",
@@ -10184,6 +10209,10 @@
       "connections_client_secret_manage": "Manage in OAuth Apps"
     },
     "tabs": {
+      "advanced": {
+        "description": "Every setting, including ones with no control elsewhere",
+        "label": "Advanced"
+      },
       "about": {
         "description": "Version, update channel, check for updates, and license",
         "label": "About"

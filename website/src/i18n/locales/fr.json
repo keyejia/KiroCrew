@@ -21811,6 +21811,31 @@
     "envOverrideWithSettingRef": "Le heartbeat est désactivé car <settingRef/> est définie dans cet environnement. Supprimez-la pour gérer la télémétrie ici."
   },
   "settings": {
+    "advanced": {
+      "title": "Tous les réglages",
+      "intro": "Modifie ici n'importe quel réglage, y compris ceux sans contrôle ailleurs. Une modification est enregistrée tout de suite dans config.json, et « Rétablir la valeur par défaut » l'annule.",
+      "search_placeholder": "Filtrer par nom, clé ou description",
+      "read_only": "Lecture seule",
+      "read_only_tip": "Ce réglage décide qui peut joindre l'agent, ce qu'il peut exécuter, ou une étape que tu dois voir. Modifie-le sur sa propre page ou dans config.json.",
+      "restart": "S'applique après redémarrage",
+      "default_label": "Par défaut : {{value}}",
+      "current_label": "Actuel : {{value}}",
+      "saves_now": "Enregistré tout de suite",
+      "saves_restart": "Enregistré tout de suite ; s'applique après un redémarrage de la passerelle",
+      "not_saved": "Non enregistré",
+      "put_back": "Rétablir la valeur enregistrée ({{value}})",
+      "reset": "Rétablir la valeur par défaut",
+      "reset_aria": "Rétablir la valeur par défaut de {{key}}",
+      "save": "Enregistrer",
+      "list_hint": "Un élément par ligne",
+      "open_setting": "Ouvrir son réglage",
+      "empty": "Aucun réglage ne correspond.",
+      "load_error": "Impossible de charger les réglages.",
+      "empty_value": "(vide)",
+      "value_on": "Activé",
+      "value_off": "Désactivé",
+      "top_level": "Général"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "Persistant utilise ce qu’il sait déjà et enregistre de nouveaux souvenirs. Incognito utilise ce qu’il sait, mais n’enregistre rien de nouveau. Temporaire démarre sans mémoire et n’enregistre rien. Tous les chats restent visibles dans l’historique. Vous pouvez changer le mode de chaque chat.",
@@ -21841,6 +21866,10 @@
       "system": "Système"
     },
     "tabs": {
+      "advanced": {
+        "description": "Tous les réglages, y compris ceux sans contrôle ailleurs",
+        "label": "Avancé"
+      },
       "about": {
         "description": "Version, canal de mise à jour, recherche de mises à jour et licence",
         "label": "À propos"

@@ -4721,3 +4721,63 @@ safety ceiling: `max(3 * 33,000, floor(window_tokens * 4.0 * 0.125))` characters
 Crossing it omits complete lesson entries first and reports their count; preferences,
 safety rules, and date/runtime identity stay whole. This does not change the fixed
 33,000-character optional-content allowance.
+
+## Settings → Advanced: every key, one validated writer
+
+Settings → Advanced (`website/src/pages/settings/AdvancedPanel.tsx`, rows in
+`website/src/components/allSettings/AllSettingsList.tsx`) lists config keys so a
+person can change one that has no control of its own without editing
+`config.json`. The frontend holds no list of keys. `GET /api/config/schema` adds an
+`allSettings` record to each entry the page lists, built by
+`dashboard/handlers/config_all_settings.py`:
+
+| Record | Meaning |
+|---|---|
+| absent | not listed: a `sensitive` or `deprecated` field, a whole section, a map, a list of non-strings, a `*` path |
+| `{"mode": "control", "settingId"}` | a Settings control saves it through `PUT /api/dashboard/config`; the row links there |
+| `{"mode": "readonly"}` | shown, never written here |
+| `{"mode": "edit", "control", "resettable", ...bounds}` | the row offers `control` (`bool`, `enum`, `int`, `float`, `str`, `str_list`) |
+
+A key whose `configKey` the settings registry already names links to that control
+instead of drawing a second one; that check is the frontend's, from
+`settingsRegistry.gen.ts`.
+
+Read-only wins over every writer. A key is read-only when `READONLY_PATHS` names it
+(sandbox, approvals, sign-in storage, cross-session reach, tunnels and tailnet,
+shared-crew admission, the decision judge's provider, product-set markers, and
+`memory.embedding_dim`, which the embedding-model action changes together with the
+model, and the top-level `observe_max_messages` / `observe_ttl_hours`, which the loader
+reads and `to_dict` saves under `slack.*`), when it
+carries a channel tag (a channel's own page runs its sign-in and allow-list checks),
+when it sits under `dashboard.feature_previews.` (the browser keeps its own copy),
+when `_MOVED_CONFIG_FIELDS` names it, or when `edition_locks.config_path_locked`
+holds it. A curated `_EDITABLE_CONFIG` rule with no drawable control
+(`normalized`, `dict`, a `values_fn` enum) is read-only too.
+
+Every other key with a curated rule is edited with that rule. A key with none gets a
+schema-derived rule from `generic_spec`: booleans, integers, numbers and enums by
+type; free text and string lists only when `TEXT_EDIT_PATHS` names them, since a
+path, URL, host or command line is where a careless value does the most harm.
+Integer and number bounds only keep an absurd value out of the file (`0` or a
+negative default up to `10**12`); the loader still clamps each field at read.
+`_editable_config_spec` asks `_EDITABLE_CONFIG` first and `generic_spec` last, and
+`generic_spec` never adds to `_EDITABLE_CONFIG`, so `change_cards_settings.resolve_setting`
+cannot offer a generic key to a change card.
+
+`PATCH /api/config/kirocrew` treats a generic rule (`"generic": True`) in two extra
+ways. `generic_value_error` checks the value with `kiro_crew config set`'s own
+`cli_config._declared_type_error` (no `"3"` or `true` for an integer), plus the
+reader's own validator for a free-text key in `_TEXT_CHECKS` (`timezone` must pass
+`cron_service.schedule.is_valid_timezone`, or be `""`).
+`{"path", "unset": true}` removes the stored leaf, so the field reads its default
+again, including a later release's default; it is refused for a curated key, whose
+guards a removal could step around, and together with `if_unset`. Owner gate, SEL
+audit, overlay refusal, write lock and hot-apply are the route's own and apply
+unchanged.
+
+`test_config_all_settings.py` holds two drift guards: an editable key whose path
+contains a security-sounding word fails until it is added to `READONLY_PATHS` or to
+the test's reviewed list; an editable key whose help says a plain config write
+must not set it fails outright; and an editable top-level key that
+`KiroCrewConfig.to_dict` does not save at the top level (an alias of another
+section's key) fails too.

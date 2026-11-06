@@ -20791,6 +20791,31 @@
     "envOverrideWithSettingRef": "<settingRef/> がこの環境で設定されているため、ハートビートはオフです。ここでテレメトリを管理するには、設定を解除してください。"
   },
   "settings": {
+    "advanced": {
+      "title": "すべての設定",
+      "intro": "ほかに操作項目がない設定も含め、ここでどの設定でも変更できます。変更はすぐに config.json に保存され、「既定値に戻す」で元に戻せます。",
+      "search_placeholder": "名前、キー、説明で絞り込む",
+      "read_only": "読み取り専用",
+      "read_only_tip": "この設定は、だれがエージェントに届くか、エージェントが何を実行できるか、または必ず確認すべき手順を決めます。専用のページか config.json で変更してください。",
+      "restart": "再起動後に反映",
+      "default_label": "既定値: {{value}}",
+      "current_label": "現在の値: {{value}}",
+      "saves_now": "すぐに保存されます",
+      "saves_restart": "すぐに保存され、ゲートウェイの再起動後に反映されます",
+      "not_saved": "保存されていません",
+      "put_back": "保存済みの値に戻す（{{value}}）",
+      "reset": "既定値に戻す",
+      "reset_aria": "{{key}} を既定値に戻す",
+      "save": "保存",
+      "list_hint": "1 行に 1 項目",
+      "open_setting": "専用の設定を開く",
+      "empty": "一致する設定はありません。",
+      "load_error": "設定を読み込めませんでした。",
+      "empty_value": "（空）",
+      "value_on": "オン",
+      "value_off": "オフ",
+      "top_level": "全般"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "永続は既知の情報を使い、新しいメモリを保存します。プライベートは既知の情報を使いますが、新しいメモリは保存しません。一時的は空の状態で始まり、何も保存しません。すべてのチャットは履歴に残ります。各チャットのモードは変更できます。",
@@ -20821,6 +20846,10 @@
       "system": "システム"
     },
     "tabs": {
+      "advanced": {
+        "description": "ほかに操作項目がないものも含む、すべての設定",
+        "label": "詳細"
+      },
       "about": {
         "description": "バージョン、更新チャネル、更新確認、およびライセンス",
         "label": "バージョン情報"

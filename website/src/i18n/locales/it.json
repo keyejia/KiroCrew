@@ -21811,6 +21811,31 @@
     "envOverrideWithSettingRef": "L'heartbeat è disattivato perché <settingRef/> è impostata in questo ambiente. Rimuovila per gestire la telemetria qui."
   },
   "settings": {
+    "advanced": {
+      "title": "Tutte le impostazioni",
+      "intro": "Modifica qui qualsiasi impostazione, comprese quelle senza un controllo altrove. Una modifica viene salvata subito in config.json e «Ripristina predefinito» la annulla.",
+      "search_placeholder": "Filtra per nome, chiave o descrizione",
+      "read_only": "Sola lettura",
+      "read_only_tip": "Questa impostazione decide chi può raggiungere l'agente, cosa può eseguire o un passaggio che devi vedere. Modificala nella sua pagina o in config.json.",
+      "restart": "Si applica dopo il riavvio",
+      "default_label": "Predefinito: {{value}}",
+      "current_label": "Attuale: {{value}}",
+      "saves_now": "Salvato subito",
+      "saves_restart": "Salvato subito; si applica dopo il riavvio del gateway",
+      "not_saved": "Non salvato",
+      "put_back": "Ripristina il valore salvato ({{value}})",
+      "reset": "Ripristina predefinito",
+      "reset_aria": "Ripristina {{key}} al valore predefinito",
+      "save": "Salva",
+      "list_hint": "Un elemento per riga",
+      "open_setting": "Apri la sua impostazione",
+      "empty": "Nessuna impostazione corrisponde.",
+      "load_error": "Impossibile caricare le impostazioni.",
+      "empty_value": "(vuoto)",
+      "value_on": "Attivo",
+      "value_off": "Disattivo",
+      "top_level": "Generale"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "Persistente usa ciò che già sa e salva nuova memoria. Incognito usa ciò che sa, ma non salva nuova memoria. Temporaneo parte senza memoria e non salva nulla. Tutte le chat restano visibili nella cronologia. Puoi cambiare la modalità di ogni chat.",
@@ -21841,6 +21866,10 @@
       "system": "Sistema"
     },
     "tabs": {
+      "advanced": {
+        "description": "Tutte le impostazioni, comprese quelle senza un controllo altrove",
+        "label": "Avanzate"
+      },
       "about": {
         "description": "Versione, canale di aggiornamento, controllo degli aggiornamenti e licenza",
         "label": "Informazioni"

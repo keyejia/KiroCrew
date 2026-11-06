@@ -20791,6 +20791,31 @@
     "envOverrideWithSettingRef": "心跳已关闭，因为 <settingRef/> 在此环境中已设置。取消设置以在此处管理遥测。"
   },
   "settings": {
+    "advanced": {
+      "title": "所有设置",
+      "intro": "在这里可以修改任何设置，包括在别处没有控件的设置。改动会立即保存到 config.json，“恢复默认值”可以撤销。",
+      "search_placeholder": "按名称、键或说明筛选",
+      "read_only": "只读",
+      "read_only_tip": "这项设置决定谁能联系到智能体、它能运行什么，或一个你必须看到的步骤。请在它自己的页面或 config.json 中修改。",
+      "restart": "重启后生效",
+      "default_label": "默认值：{{value}}",
+      "current_label": "当前值：{{value}}",
+      "saves_now": "立即保存",
+      "saves_restart": "立即保存，网关重启后生效",
+      "not_saved": "未保存",
+      "put_back": "恢复已保存的值（{{value}}）",
+      "reset": "恢复默认值",
+      "reset_aria": "将 {{key}} 恢复为默认值",
+      "save": "保存",
+      "list_hint": "每行一项",
+      "open_setting": "打开它的设置",
+      "empty": "没有匹配的设置。",
+      "load_error": "无法加载设置。",
+      "empty_value": "（空）",
+      "value_on": "已开启",
+      "value_off": "已关闭",
+      "top_level": "通用"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "持久模式会使用已知信息并保存新记忆。隐身模式会使用已知信息，但不保存新记忆。临时模式从空白开始，不保存任何记忆。所有聊天仍会显示在历史记录中。你可以更改任意聊天的模式。",
@@ -20821,6 +20846,10 @@
       "system": "系统"
     },
     "tabs": {
+      "advanced": {
+        "description": "所有设置，包括在别处没有控件的设置",
+        "label": "高级"
+      },
       "about": {
         "description": "版本、更新渠道、检查更新与许可证",
         "label": "关于"

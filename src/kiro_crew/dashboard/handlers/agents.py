@@ -470,6 +470,7 @@ def _supply_live_enum(entry: dict) -> None:
 
 async def api_config_schema(request: web.Request) -> web.Response:
     """GET /api/config/schema — return config schema entries."""
+    from kiro_crew.dashboard.handlers.config_all_settings import attach_descriptor
     from kiro_crew.edition_locks import LOCKED_BY_POLICY, config_path_locked
 
     entries = SCHEMA_REGISTRY
@@ -496,6 +497,7 @@ async def api_config_schema(request: web.Request) -> web.Response:
         # An enterprise build ignores this local value (RFC D3, kiro_crew.edition_locks).
         if config_path_locked(entry.path):
             d["lockedByPolicy"] = LOCKED_BY_POLICY
+        attach_descriptor(d, entry)
         result.append(d)
 
     return web.json_response({"entries": result})

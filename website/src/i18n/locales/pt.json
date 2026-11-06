@@ -21811,6 +21811,31 @@
     "envOverrideWithSettingRef": "O heartbeat está desativado porque <settingRef/> está definida neste ambiente. Remova-a para gerenciar a telemetria aqui."
   },
   "settings": {
+    "advanced": {
+      "title": "Todas as configurações",
+      "intro": "Altere aqui qualquer configuração, incluindo as que não têm controle em outro lugar. Uma alteração é salva no config.json na hora, e “Restaurar padrão” a desfaz.",
+      "search_placeholder": "Filtrar por nome, chave ou descrição",
+      "read_only": "Somente leitura",
+      "read_only_tip": "Esta configuração decide quem pode alcançar o agente, o que ele pode executar ou uma etapa que você precisa ver. Altere-a na página dela ou no config.json.",
+      "restart": "Aplica após reiniciar",
+      "default_label": "Padrão: {{value}}",
+      "current_label": "Atual: {{value}}",
+      "saves_now": "Salvo na hora",
+      "saves_restart": "Salvo na hora; aplica após reiniciar o gateway",
+      "not_saved": "Não salvo",
+      "put_back": "Restaurar valor salvo ({{value}})",
+      "reset": "Restaurar padrão",
+      "reset_aria": "Restaurar {{key}} para o padrão",
+      "save": "Salvar",
+      "list_hint": "Um item por linha",
+      "open_setting": "Abrir a configuração dela",
+      "empty": "Nenhuma configuração corresponde.",
+      "load_error": "Não foi possível carregar as configurações.",
+      "empty_value": "(vazio)",
+      "value_on": "Ativado",
+      "value_off": "Desativado",
+      "top_level": "Geral"
+    },
     "chat": {
       "defaultMemoryMode": {
         "description": "Persistente usa o que já sabe e salva nova memória. Anônimo usa o que sabe, mas não salva nova memória. Temporário começa em branco e não salva nada. Todos os chats continuam aparecendo no histórico. Você pode mudar o modo de qualquer chat.",
@@ -21841,6 +21866,10 @@
       "system": "Sistema"
     },
     "tabs": {
+      "advanced": {
+        "description": "Todas as configurações, incluindo as que não têm controle em outro lugar",
+        "label": "Avançado"
+      },
       "about": {
         "description": "Versão, canal de atualização, verificação de atualizações e licença",
         "label": "Sobre"
