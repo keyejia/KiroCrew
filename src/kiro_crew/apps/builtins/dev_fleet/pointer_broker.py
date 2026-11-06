@@ -40,10 +40,10 @@ _REQUEST_TIMEOUT_SECS = 5.0
 class GatewayPointerBroker:
     """Async callable ``(fresh) -> PointerState`` backed by the gateway route."""
 
-    def __init__(self, *, port: int, app_secret: str, app_name: str = "dev-fleet") -> None:
-        if port <= 0:
-            raise ValueError("gateway port must be positive")
-        self._base = f"http://127.0.0.1:{port}"
+    def __init__(self, *, origin: str, app_secret: str, app_name: str = "dev-fleet") -> None:
+        if not origin:
+            raise ValueError("gateway origin must be set")
+        self._base = origin
         self._secret = app_secret
         self._app = app_name
         self._token: str | None = None
