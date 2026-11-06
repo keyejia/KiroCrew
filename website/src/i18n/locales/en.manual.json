@@ -6121,6 +6121,7 @@
         "steer_rate_label": "This choice",
         "steer_chose_queue": "Jev chose: run after this turn",
         "steer_chose_steer": "Jev chose: interrupt this turn",
+        "steer_chose_steer_own_message": "Jev chose: interrupt the turn, but this runs as its own message",
         "steer_rate_right": "Jev chose the right handling",
         "steer_rate_wrong": "Jev chose the wrong handling",
         "agreed": "Both picked the same skills",

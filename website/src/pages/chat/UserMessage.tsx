@@ -267,6 +267,12 @@ const UserMessage = memo(function UserMessage({ content, meta, timestamp, timest
   // excluded from `isSteer` above, so the accent badge's confirmed-only gating
   // (#7997) is untouched.
   const steerMeta = !!(meta && (meta as { steer?: boolean }).steer)
+  // No running turn took this row, so it runs as its own turn: a steer the turn
+  // ended before reading (`requeued`, then `superseded` once its new row lands),
+  // or a row with no `meta.steer` that carries the receipt (the row the drain
+  // writes for a requeued steer, or the queued row of a steer that was
+  // unavailable). The receipt's steer sentence says so on these rows.
+  const ranAsOwnTurn = !steerMeta || steerState === 'requeued' || steerState === 'superseded'
   // `hideSteerBadge` silences all three lifecycle indicators, not just the
   // confirmed badge: "Steering…" and "runs as its own message" are the same
   // steer/queue vocabulary the steer-only surface exists to hide.
@@ -769,7 +775,7 @@ const UserMessage = memo(function UserMessage({ content, meta, timestamp, timest
           {/* WHO chose this, when the sender did not. Below the badge that says
               what happened, because the badge is the outcome and this is the
               decision behind it. */}
-          {steerDecision && <SteerDecisionLine record={steerDecision} />}
+          {steerDecision && <SteerDecisionLine record={steerDecision} ranAsOwnTurn={ranAsOwnTurn} />}
           <motion.div
             /* Same width cap as the bubble (the column, `max-w-full`): this
                wrapper sits between the content column and the bubble, and a
@@ -911,7 +917,7 @@ const UserMessage = memo(function UserMessage({ content, meta, timestamp, timest
               chosen. Drawn in both arms rather than above them: the confirmed-steer
               arm wraps its bubble in an animated box, and a line inside that box
               would slide in with it as though it were part of the message. */}
-          {steerDecision && <SteerDecisionLine record={steerDecision} />}
+          {steerDecision && <SteerDecisionLine record={steerDecision} ranAsOwnTurn={ranAsOwnTurn} />}
           {bubbleWithMenu}
         </>
       )}
