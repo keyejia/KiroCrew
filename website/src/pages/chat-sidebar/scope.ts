@@ -395,6 +395,7 @@ export interface SidebarScope {
   refetchColumns: ReturnType<typeof useBoardColumns>['refetchColumns']
   tagColumnsEnabled: ReturnType<typeof useBoardColumns>['tagColumnsEnabled']
   hideEmptyFolderBody: ReturnType<typeof useBoardColumns>['hideEmptyFolderBody']
+  hideEmptyFolders: ReturnType<typeof useBoardColumns>['hideEmptyFolders']
   orderedColumns: ReturnType<typeof useBoardColumns>['orderedColumns']
 
   // From `useSidebarResize`

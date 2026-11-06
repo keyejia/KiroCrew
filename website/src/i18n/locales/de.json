@@ -18187,6 +18187,8 @@
         "confirm_before_closing_session": "Vor dem Schließen der Sitzung bestätigen",
         "compact_empty_folders": "Kompakte leere Ordner",
         "a_folder_with_no_chats_takes_one_row_instead_of": "Ein Ordner ohne Chats belegt eine Zeile statt zwei, und seine Schaltfläche für einen neuen Chat wandert in die Ordnerzeile",
+        "hide_empty_folders": "Leere Ordner ausblenden",
+        "hide_empty_folders_description": "In der Listenansicht bleiben Ordner ohne offene Sitzungen ausgeblendet, bis darin eine Sitzung erstellt oder dorthin verschoben wird, und werden beim Ziehen einer Sitzung angezeigt",
         "full_titles_on_scroll": "Vollständige Titel beim Scrollen anzeigen",
         "full_titles_on_scroll_description": "Beim Scrollen der Sitzungsliste werden von der Seitenleiste abgeschnittene Titel vollständig angezeigt",
         "session_title_lines": "Titelzeilen auf Sitzungskarten",
