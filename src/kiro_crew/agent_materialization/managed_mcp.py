@@ -788,6 +788,8 @@ def register_managed_refs(config: dict, *, fresh_install: bool, gated_off: froze
     # On fresh installs, ensure managed MCP tools are in tools (but NOT
     # allowedTools — new MCPs may have destructive tools; user opts in).
     # On existing configs, don't touch tools/allowedTools — user controls those.
+    # An edition server first supplied on an existing config gets its ref once
+    # from ``guide_platform.grant_edition_refs_once`` instead.
     if fresh_install:
         added_refs: list[str] = []
         # Managed servers + edition-contributed servers both get their @ref

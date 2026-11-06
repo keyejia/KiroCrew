@@ -820,6 +820,9 @@ def rebuild_agent_config(
     mate_grant_pending = guide_platform.grant_mate_platform_once(
         config, fresh_install=fresh_install
     )
+    edition_refs_pending = guide_platform.grant_edition_refs_once(
+        config, fresh_install=fresh_install, gated_off=gated_off
+    )
 
     # Final dedup (preserves order).
     for key in ("tools", "allowedTools"):
@@ -875,6 +878,8 @@ def rebuild_agent_config(
         guide_platform.mark_guide_platform_granted()
     if mate_grant_pending:
         guide_platform.mark_mate_platform_granted()
+    if edition_refs_pending:
+        guide_platform.mark_edition_refs_offered(edition_refs_pending)
 
     conductor_held = _install_sibling_specs(refresh_forks, gated_off, clean=clean)
 
