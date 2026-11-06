@@ -25,6 +25,7 @@ import logging
 import os
 import platform
 import re
+import socket
 import stat as stat_module
 import subprocess
 import sys
@@ -39,6 +40,7 @@ from urllib.parse import quote, urlencode
 from kiro_crew import __version__, agent_scratch, platform_compat, release_channel
 from kiro_crew.cli_log_files import boot_log_paths
 from kiro_crew.config.loader import config_dir
+from kiro_crew.dashboard import crash_dump_store
 from kiro_crew.kiro_cli import PATH_ONLY_INSTALL_NOTE, pin_kiro_cli
 from kiro_crew.platform import PlatformCompositionError, current_context, safe_context_call
 from kiro_crew.security import (
@@ -125,10 +127,11 @@ class BundleResult:
     skipped: list[str] = field(default_factory=list)
     #: member name -> number of secret redactions applied (0 = clean)
     redaction_summary: dict[str, int] = field(default_factory=dict)
-    #: Count of home/data-home path prefixes collapsed to ``~`` across all text
-    #: members. Tracked apart from :attr:`redaction_summary` because a path
-    #: collapse hides an OS login, not a secret -- folding it into the secret
-    #: tally would overstate "N secret(s) auto-redacted" in the issue body.
+    #: Count of home/data-home path prefixes collapsed to ``~``, plus host-name
+    #: replacements, across all text members. Tracked apart from
+    #: :attr:`redaction_summary` because each hides a login or a machine name,
+    #: not a secret -- folding it into the secret tally would overstate
+    #: "N secret(s) auto-redacted" in the issue body.
     path_collapses: int = 0
     github_issue_url: str = ""
     #: The ONE release-provenance resolution this bundle was written from.
@@ -297,8 +300,30 @@ def _collapse_home_prefixes(text: str) -> tuple[str, int]:
     return text, count
 
 
+def _replace_host_name(text: str) -> tuple[str, int]:
+    """Replace this machine's host name in *text* with ``<host>``.
+
+    Crash-dump headers and the ``last-healthy-boot`` marker record a PID domain
+    that starts with the host name, and a work machine's name often carries its
+    user's name or an asset tag. That domain is cached at boot, so both it and
+    the live name are replaced, each in full and in its short form before the
+    first ``.``, and only as a whole segment.
+    """
+    recorded = crash_dump_store.current_process_identity()[0].partition("/")[0]
+    names = {
+        name
+        for full in (socket.gethostname(), recorded)
+        for name in (full, full.partition(".")[0])
+        if name
+    }
+    # One pass, longest first, so a full name wins over its short form.
+    alternatives = "|".join(map(re.escape, sorted(names, key=len, reverse=True)))
+    pattern = re.compile(rf"(?<![A-Za-z0-9_-])(?:{alternatives}){_PREFIX_BOUNDARY}", re.IGNORECASE)
+    return pattern.subn("<host>", text)
+
+
 def _scrub_bundle(text: str) -> tuple[str, int, int]:
-    """``_scrub`` plus a home-prefix collapse, for bundle text members only.
+    """``_scrub`` plus a home-prefix collapse and the host-name replacement.
 
     The bundle's stated destination is a public issue, so a text member must not
     carry the OS login: on Windows the login is embedded in nearly every
@@ -307,7 +332,7 @@ def _scrub_bundle(text: str) -> tuple[str, int, int]:
     protocol-log reader, whose output goes to a model context, not a public
     issue, so the extra pass is scoped to the bundle here.
 
-    The home collapse runs LAST, after ``_EXTRA_REDACTIONS``, so a credential
+    The home collapse runs after ``_EXTRA_REDACTIONS``, so a credential
     header sitting directly after a ``file:line:`` prefix is redacted by the
     credential rules first and never swallowed. The collapse replaces only the
     home and data-home PREFIX with ``~`` and keeps the rest of each path, so a
@@ -315,12 +340,13 @@ def _scrub_bundle(text: str) -> tuple[str, int, int]:
     and repo-relative frames are left intact.
 
     Returns ``(clean, secrets, path_collapses)``: the secret count and the
-    path-collapse count are kept apart so the issue body does not report a path
-    collapse as a "secret".
+    path-collapse count (host-name replacements included) are kept apart so the
+    issue body does not report either as a "secret".
     """
     text, secrets = _scrub(text)
     text, collapses = _collapse_home_prefixes(text)
-    return text, secrets, collapses
+    text, hosts = _replace_host_name(text)
+    return text, secrets, collapses + hosts
 
 
 def _kiro_log_dirs() -> list[Path]:
@@ -1254,6 +1280,7 @@ def _issue_url(result: BundleResult, note: str, *, prefill: bool = True) -> str:
                 f"{result.total_redactions} secret(s) auto-redacted"
                 + (
                     f" and {result.path_collapses} path(s) collapsed to `~`"
+                    " or host name(s) replaced"
                     if result.path_collapses
                     else ""
                 )

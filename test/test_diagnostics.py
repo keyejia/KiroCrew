@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import socket
 import threading
 import time
 import zipfile
@@ -27,6 +28,7 @@ import yaml
 
 from conftest import make_dir_link, requires_symlinks
 from kiro_crew import agent_scratch, beacon, diagnostics, release_channel
+from kiro_crew.dashboard import crash_dump_store
 from kiro_crew.dashboard.handlers import diagnostics as dh
 from kiro_crew.diagnostics import BundleResult
 
@@ -447,6 +449,38 @@ def test_path_collapses_counted_apart_from_secrets(tmp_path, monkeypatch):
     # The issue body reports secrets and collapses as distinct numbers.
     assert f"{r.total_redactions} secret(s) auto-redacted" in body
     assert f"{r.path_collapses} path(s) collapsed" in body
+
+
+def test_bundle_replaces_the_host_name_crash_records_carry(tmp_path, monkeypatch):
+    """The live host name and the one the dump writer cached at boot both go.
+
+    Each is replaced in full and in its short form in every member, while a
+    longer name the short one is a prefix of survives.
+    """
+    home = tmp_path / "home"
+    _isolate(monkeypatch, home)
+    monkeypatch.setattr(socket, "gethostname", lambda: "Jane-Laptop.corp.example")
+    monkeypatch.setattr(crash_dump_store, "_pid_domain", lambda: "jdoe-mbp.corp.example/pid:[1]")
+    dumps = home / "logs" / "crash-dumps"
+    dumps.mkdir(parents=True)
+    (dumps / "loopstall-20261102T190508Z.txt").write_text(
+        f"# PID: 4242 @ {crash_dump_store._pid_domain()} start=99\n"
+    )
+    crash_dump_store.record_healthy_boot(dumps)
+    (home / "gateway.log").write_text("serving as JANE-LAPTOP; jane-laptop2 is another box\n")
+
+    r = diagnostics.collect_bundle(output_dir=tmp_path / "out")
+
+    with zipfile.ZipFile(r.zip_path) as z:
+        members = {n: z.read(n).decode() for n in z.namelist()}
+    for name, text in members.items():
+        lowered = text.lower().replace("jane-laptop2", "")
+        for leaked in ("jane-laptop", "jdoe-mbp", "corp.example"):
+            assert leaked not in lowered, (name, leaked)
+    assert members["crash-dumps/loopstall-20261102T190508Z.txt"].startswith("# PID: 4242 @ <host>")
+    assert members["crash-dumps/last-healthy-boot"].split()[1].startswith("<host>")
+    assert "jane-laptop2 is another box" in members["gateway.log"]
+    assert r.path_collapses >= 3
 
 
 def test_authorization_scheme_credential_fully_redacted(tmp_path, monkeypatch):
