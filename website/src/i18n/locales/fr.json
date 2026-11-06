@@ -6064,7 +6064,11 @@
   "components": {
     "dataHomeOwnerNotice": {
       "message": "Certains fichiers de {{productName}} appartiennent à un autre utilisateur, donc {{productName}} ne peut pas les lire.",
-      "run_this": "Lance cette commande dans un terminal sur cet ordinateur, puis réessaie."
+      "run_this": "Lance cette commande dans un terminal sur cet ordinateur, puis réessaie.",
+      "fix_button": "Réparer les autorisations",
+      "fixing": "Réparation…",
+      "fixed": "Réparé. Réessaie.",
+      "fix_failed": "Impossible de réparer les fichiers. Lance plutôt la commande ci-dessous dans un terminal."
     },
     "mateWorkers": {
       "approvals_label": "Approbations d’outils des sessions de ce Bot : {{n}}",

@@ -6064,7 +6064,11 @@
   "components": {
     "dataHomeOwnerNotice": {
       "message": "Algunos archivos de {{productName}} pertenecen a otro usuario, así que {{productName}} no puede leerlos.",
-      "run_this": "Ejecuta este comando en una terminal de este equipo y vuelve a intentarlo."
+      "run_this": "Ejecuta este comando en una terminal de este equipo y vuelve a intentarlo.",
+      "fix_button": "Arreglar permisos",
+      "fixing": "Arreglando…",
+      "fixed": "Arreglado. Vuelve a intentarlo.",
+      "fix_failed": "No se pudieron arreglar los archivos. Ejecuta el comando de abajo en una terminal."
     },
     "mateWorkers": {
       "approvals_label": "Aprobaciones de herramientas de las sesiones de este Bot: {{n}}",

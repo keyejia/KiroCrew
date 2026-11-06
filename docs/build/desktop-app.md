@@ -834,6 +834,24 @@ then lists the folder through `/api/browse-dirs`, the read its path field uses,
 and commits it only when that listing succeeds; a refusal, a failed dialog and
 a refused gate are each told beside the button.
 
+The **Fix permissions** button on the data-home notice (files another account
+owns, see `docs/system-specs/modules/cli.md` "Data home owned by another
+account") rides the same gate. `window.dataHomeFixAPI` has two calls, and
+neither passes anything to the main process. `available()` invokes
+`data-home:can-fix`, which runs the three checks and answers whether this host
+offers an admin prompt (`/usr/bin/osascript` on macOS, `pkexec` on Linux, each at
+a fixed path); the notice shows the button only on `true`, and keeps the command
+to copy everywhere. `fix()` invokes `data-home:fix`, which runs the same checks,
+resolves the data home itself (`home-dir.js`), refuses one that is a link, not a
+directory or a filesystem root, and asks the OS to run exactly
+`chown -R -P <this uid> <real path>` with admin rights: macOS through
+`do shell script ... with administrator privileges`, Linux through `pkexec`. The
+OS draws the password prompt, so the password never reaches the app. `-P` keeps
+the walk from following any link inside the folder. The owner-only modes are then
+restored with `chmod -R u+rwX` as the person, without privilege. It answers
+`{ ok }`, or `{ ok: false, reason }` with `cancelled` for a dismissed prompt;
+[`data-home-fix.js`](../../website/electron/data-home-fix.js) owns the route.
+
 Before spawning a **bundled** backend the shell checks that the bundle's Python
 stdlib is fully on disk
 ([`bundle-integrity.js`](../../website/electron/bundle-integrity.js)). The

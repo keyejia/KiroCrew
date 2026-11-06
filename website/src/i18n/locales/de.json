@@ -5898,7 +5898,11 @@
   "components": {
     "dataHomeOwnerNotice": {
       "message": "Einige {{productName}}-Dateien gehören einem anderen Benutzer, deshalb kann {{productName}} sie nicht lesen.",
-      "run_this": "Führ diesen Befehl in einem Terminal auf diesem Computer aus und versuch es dann noch einmal."
+      "run_this": "Führ diesen Befehl in einem Terminal auf diesem Computer aus und versuch es dann noch einmal.",
+      "fix_button": "Berechtigungen reparieren",
+      "fixing": "Wird repariert…",
+      "fixed": "Repariert. Versuch es noch einmal.",
+      "fix_failed": "Die Dateien konnten nicht repariert werden. Führ stattdessen den Befehl unten in einem Terminal aus."
     },
     "mateWorkers": {
       "approvals_label": "Tool-Freigaben aus den Sitzungen dieses Bot: {{n}}",

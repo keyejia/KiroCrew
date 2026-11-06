@@ -139,6 +139,18 @@ declare global {
     pick: () => Promise<string | null>
   }
 
+  /**
+   * One-click repair for a data home another account owns. Neither call takes
+   * an argument: the main process resolves the folder and the OS asks for the
+   * admin password, which never reaches the app.
+   */
+  interface DataHomeFixAPI {
+    /** Whether this window is the local dashboard on a host with an admin prompt. */
+    available: () => Promise<boolean>
+    /** Ask for admin rights and give the data home back to this account. */
+    fix: () => Promise<{ ok: boolean; reason?: 'unavailable' | 'cancelled' | 'failed' }>
+  }
+
   interface ZoomAPI {
     get: () => Promise<number>
     set: (factor: number) => Promise<number>
@@ -310,6 +322,7 @@ declare global {
     crashReportsAPI?: CrashReportsAPI
     wslAPI?: WslAPI
     folderPickAPI?: FolderPickAPI
+    dataHomeFixAPI?: DataHomeFixAPI
     zoomAPI?: ZoomAPI
     browserAPI?: BrowserAPI
     updateAPI?: UpdateAPI
