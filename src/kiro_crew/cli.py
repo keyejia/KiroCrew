@@ -621,6 +621,17 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Before anything can write into the data home: a root run aimed at a
+    # person's own home would leave files that person cannot read.
+    if args.command is not None:
+        from kiro_crew.config.paths import peek_data_home
+        from kiro_crew.data_home_owner import root_run_refusal
+
+        _refusal = root_run_refusal(peek_data_home(), args.command, sys.argv[1:])
+        if _refusal:
+            print(_refusal, file=sys.stderr)
+            sys.exit(1)
+
     # Cap glibc malloc arenas before the gateway starts any thread pool: an
     # uncapped glibc gives a busy thread its own 64 MiB arena heaps, and on a
     # many-core host those idle heaps were most of the gateway's RSS. In-process
@@ -706,6 +717,17 @@ def main() -> None:
         prime_extension_config_keys()
     _setup_cli_logging(args.command, args.verbose)
     platform_compat.log_malloc_arena_cap(arena_cap)
+    if args.command == "gateway":
+        from kiro_crew.data_home_owner import check_data_home
+
+        _access = check_data_home(config_dir())
+        if not _access.ok:
+            logger.warning(
+                "Some Kiro Crew files belong to another user, so Kiro Crew can't read "
+                "them: %s. Fix: %s",
+                ", ".join(_access.foreign),
+                _access.fix_command,
+            )
 
     # No subcommand: show banner + help. Later ``args.command.startswith`` calls
     # would raise on None.

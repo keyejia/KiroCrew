@@ -6062,6 +6062,10 @@
     "viewPr": "Pull request"
   },
   "components": {
+    "dataHomeOwnerNotice": {
+      "message": "Certains fichiers de {{productName}} appartiennent à un autre utilisateur, donc {{productName}} ne peut pas les lire.",
+      "run_this": "Lance cette commande dans un terminal sur cet ordinateur, puis réessaie."
+    },
     "mateWorkers": {
       "approvals_label": "Approbations d’outils des sessions de ce Bot : {{n}}",
       "trust": "Faire confiance à cette session",

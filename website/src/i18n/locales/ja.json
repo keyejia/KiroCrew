@@ -5730,6 +5730,10 @@
     "viewPr": "プルリクエスト"
   },
   "components": {
+    "dataHomeOwnerNotice": {
+      "message": "一部の {{productName}} のファイルが別のユーザーのものになっているため、{{productName}} が読み込めません。",
+      "run_this": "このコンピューターのターミナルでこのコマンドを実行してから、もう一度お試しください。"
+    },
     "mateWorkers": {
       "approvals_label": "この Bot のセッションからのツール承認: {{n}}",
       "trust": "このセッションを信頼",
