@@ -297,6 +297,63 @@ def spec_hook_tool_names(tool_id: str) -> tuple[str, ...] | None:
     return kas_tool_match_names(tool_id)
 
 
+#: The hook store's event names, as kiro-cli writes them in ``hook_event_name``.
+_HOOK_EVENT_TO_OBJECT_EVENT = {v: k for k, v in _OBJECT_EVENT_TO_HOOK_EVENT.items()}
+
+
+def kiro_cli_hook_payload(payload: dict, event: str, tool_names: Sequence[str] | None) -> dict:
+    """*payload* as kiro-cli writes an agent spec hook's stdin.
+
+    Crew runs on kiro-cli's V2 engine (its ACP client allowlist pins ``kirocrew``
+    there), and V2 sends every spec hook, object or array form, the same shape
+    (``agent/src/agent/task_executor/mod.rs`` ``run_command_hook``): a camelCase
+    ``hook_event_name``, the tool's full name (``shell``, ``read``, ``write``, or
+    ``@server/tool``) with its ``tool_tags``, and a Stop's ``assistant_response``.
+    A spec hook reads those here too, so a script that branches on them takes the
+    branch it takes on kiro-cli. Crew's own keys stay, so a script reading them
+    still works.
+
+    *tool_names* are the names the hook's matcher met (``extra_hooks_tool_names``,
+    first name first); without them the tool fields are left as they are.
+    """
+    # circular import: see spec_hook_tool_names.
+    from kiro_crew.acp.kas_permissions import HOOK_BUILTIN_MATCHER, SPEC_HOOK_TOOL_TAGS
+    from kiro_crew.platform.tool_names import KIRO_TOOL_ALIASES
+
+    out = dict(payload)
+    out["hook_event_name"] = _HOOK_EVENT_TO_OBJECT_EVENT.get(event, event)
+    if event == HOOK_EVENT_STOP:
+        out["assistant_response"] = payload.get("assistant_text", "")
+    if not tool_names:
+        return out
+
+    # The first name is the call's reading: opencode's own ``apply_patch`` names
+    # ``fs_write`` first and ``@apply/patch`` later; an MCP ``web_search`` names
+    # ``@web/search`` first. A KAS MCP call names its bare KAS id first and has no
+    # built-in reading, so its ``@server/tool`` form is taken from further on.
+    def _is_mcp(name: str) -> bool:
+        return name.startswith("@") and "/" in name and not name.startswith("@builtin/")
+
+    first = tool_names[0]
+    mcp: str | None = None
+    if _is_mcp(first):
+        mcp = first
+    elif HOOK_BUILTIN_MATCHER not in tool_names:
+        mcp = next((n for n in tool_names if _is_mcp(n)), None)
+    if mcp is not None:
+        out["tool_name"] = mcp
+        out["tool_tags"] = [mcp, f"@{mcp[1:].split('/', 1)[0]}", "@mcp"]
+        return out
+    tags = [tag for tag, tools in SPEC_HOOK_TOOL_TAGS.items() if first in tools]
+    if HOOK_BUILTIN_MATCHER in tool_names:
+        tags.append(HOOK_BUILTIN_MATCHER)
+    # V2's own names for the built-ins Crew's tables spell in v1 (``execute_bash``).
+    v2_names = {v: k for k, v in KIRO_TOOL_ALIASES.items()} | {"use_subagent": "subagent"}
+    out["tool_name"] = v2_names.get(first, first)
+    out["tool_tags"] = tags
+    return out
+
+
 def envelope_named_tool_id(tool_id: str) -> bool:
     """Whether *tool_id* is a call on a harness whose ids come only from Crew's gate envelope.
 
