@@ -570,7 +570,9 @@ class SessionMap:
         self._io_lock = threading.Lock()
         # Set by ``_load`` when the file exists but could not be read; while set
         # ``_write_payload`` raises, so the unread map on disk is never replaced.
+        # ``_reread_after_failed_load`` may clear it; its one attempt is this task.
         self._load_failed = False
+        self._reread_task: asyncio.Task[None] | None = None
         # Set by ``_load`` when the file exists but is not usable JSON; the first
         # ``_write_payload`` moves it to ``<name>.corrupt-<utc>`` and clears it.
         self._set_aside_owed = False
@@ -598,6 +600,7 @@ class SessionMap:
         try:
             while True:
                 await asyncio.sleep(_FLUSH_DEBOUNCE_SECS)
+                await self._reread_after_failed_load()
                 snapshot = self._take_pending_snapshot()
                 if snapshot is None:
                     return
@@ -1397,6 +1400,7 @@ class SessionMap:
     # The map's critical section and its file: ``kiro_crew.session_map_store``.
     batched_save = _store.batched_save
     _load = _store._load
+    _reread_after_failed_load = _store._reread_after_failed_load
     _save = _store._save
     _take_pending_snapshot = _store._take_pending_snapshot
     _serialize = _store._serialize
