@@ -17,7 +17,7 @@ import shutil
 import threading
 from pathlib import Path
 
-from kiro_crew import platform_compat
+from kiro_crew import platform_compat, skill_live_loaders
 from kiro_crew.apps.bridges_sources import (
     _namespace,
     _registration_denied,
@@ -326,11 +326,17 @@ def reconcile_app_skills(app_name: str) -> list[str]:
 def _write_app_skill_links() -> None:
     """Rewrite the skills root's ``.app-skill-links.json`` from the app-skill links on disk.
 
-    Rebuilt whole after every link change and never read back, so a bad file heals on
-    the next one; a failed write is logged. Rules: app-kit-platform.md section 5.2.
+    Rebuilt whole after every link change, so a bad file heals on the next one; a
+    failed write is logged. When the set of links differs from the file's (or cannot
+    be read), every live skills loader of this root drops its cached catalog, so an
+    app's skills appear and disappear with its install, enable, disable and
+    uninstall instead of a catalog TTL later. An unchanged set (the boot reconcile
+    re-linking what is already there) keeps the stored snapshot. Rules:
+    app-kit-platform.md section 5.2.
     """
     skills_root = _skills_dir()
     path = skills_root / _APP_SKILL_LINKS
+    changed = True
     with _APP_SKILL_LINKS_LOCK:
         try:
             owners: dict[str, str] = {}
@@ -349,6 +355,14 @@ def _write_app_skill_links() -> None:
                 if target in owner_of_target:
                     owners[name] = owner_of_target[target]
             body = {"format": 1, "links": {k: {"app": v} for k, v in sorted(owners.items())}}
-            atomic_write(path, json.dumps(body, indent=2) + "\n")
+            text = json.dumps(body, indent=2) + "\n"
+            try:
+                changed = path.read_text(encoding="utf-8") != text
+            except (OSError, UnicodeDecodeError):
+                pass  # absent or unreadable: written below, and counted as a change
+            if changed:
+                atomic_write(path, text)
         except OSError as exc:
             logger.warning("Could not write %s: %s", path, exc)
+    if changed:
+        skill_live_loaders.invalidate_loaders_of(skills_root)

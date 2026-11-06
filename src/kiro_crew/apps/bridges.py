@@ -234,6 +234,7 @@ if TYPE_CHECKING:  # names it serves from outside the family, from their homes
     from kiro_crew import (  # noqa: F401
         pinned_fs,
         platform_compat,
+        skill_live_loaders,
     )
     from kiro_crew.apps import deps_boot as _deps_boot_module  # noqa: F401
     from kiro_crew.apps.agent_template_values import (  # noqa: F401
