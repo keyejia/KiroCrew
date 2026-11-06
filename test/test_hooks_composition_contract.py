@@ -204,9 +204,9 @@ _NEW_OWNER_DEFS: dict[str, tuple[str, ...]] = {
 #: ``deny_aliases`` (the KAS tool-id spellings ``gate_decision`` reads as one
 #: identity), then ``own_scopes`` (the scopes a proven non-shell call is judged
 #: in), all keyword defaults, so every pre-split caller still fits.
-#: ``run_script_hook`` and ``_hook_subprocess_env`` take a trailing
-#: ``acp_session_id=None`` keyword, so their callers fit too.
-_BASE_SHAPE_DIGEST = "7e872cdc83e52010926255562ce45a06080de990bd7ddae5ead63d497ad9c6e2"
+#: ``run_script_hook``, ``_hook_subprocess_env`` and ``permission_pre_tool_block``
+#: take a trailing ``acp_session_id=None`` keyword, so their callers fit too.
+_BASE_SHAPE_DIGEST = "c5af8949284cccafb5d0ed8af988c49baeae3eb5e3ed24166c704585c108c819"
 
 #: Definitions that stay in the facade file, each because a guard, a contract or the
 #: ``compose`` ordering reads it there. The reason per entry is in
