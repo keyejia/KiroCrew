@@ -11,6 +11,8 @@ object. ``_ChatSlot.project`` reads and writes it through a property, so every
 ``slot.project = x`` already writes the shared cell and every ``slot.project is token``
 rollback check reads it. A rollback therefore skips a peer's newer write (the identity
 differs) and restores the whole group otherwise, with no per-peer rollback contract.
+``_ChatSlot.autocompact_pct`` (the session's compaction threshold) is held the same
+way, so a threshold set through one alias is the value every alias saves.
 
 :func:`bind_transcript` is the one place a slot's binding is chosen. Call it after
 anything that can change the slot's history key.
@@ -27,9 +29,11 @@ if TYPE_CHECKING:
 class TranscriptBinding:
     """The cells a slot shares with every live alias on its transcript."""
 
-    __slots__ = ("project", "assigned", "_commit")
+    __slots__ = ("project", "assigned", "_commit", "autocompact_pct")
 
-    def __init__(self, project: str = "", assigned: bool = False) -> None:
+    def __init__(
+        self, project: str = "", assigned: bool = False, autocompact_pct: float | None = None
+    ) -> None:
         self.project = project
         # Whether the group has chosen its directory: it held one, or cleared one it
         # held. A slot born linked and never seeded holds "" without choosing it.
@@ -37,6 +41,9 @@ class TranscriptBinding:
         # (token, assigned before it) for the newest provisional commit, so its
         # rollback can put ``assigned`` back. Identity-keyed, like the rollback.
         self._commit: tuple[object, bool] | None = None
+        # The session's compaction threshold override (percent); None follows the
+        # crew's default, else the global ``session.autocompact_pct``.
+        self.autocompact_pct = autocompact_pct
 
 
 def write_project(binding: TranscriptBinding, value: str) -> None:
@@ -80,7 +87,8 @@ def bind_transcript(state: Any, slot: _ChatSlot) -> None:
     """Point *slot* at the binding its transcript's live aliases hold.
 
     * Another live slot on the same history key: adopt that slot's binding. The live
-      peer wins, because it holds the value the shared session runs with.
+      peer wins, because it holds the value the shared session runs with, except
+      where it holds nothing yet: the joiner's directory or threshold then fills it.
     * No live peer, but the slot's binding is still held by a slot on another key (it
       just left an alias group): give it a private copy. It keeps its value and stops
       affecting the group it left.
@@ -111,6 +119,11 @@ def bind_transcript(state: Any, slot: _ChatSlot) -> None:
                 # joiner's own value, often just read from disk, is the group's.
                 shared.project = own.project
                 shared.assigned = True
+            if shared.autocompact_pct is None:
+                # A peer with none may never have read the line (born linked). A
+                # clear is persisted before it is answered, so a joiner that read
+                # the line agrees with it.
+                shared.autocompact_pct = own.autocompact_pct
             slot._binding = shared
             if seeded:
                 _reset_if_running(state, slot)
@@ -126,7 +139,9 @@ def bind_transcript(state: Any, slot: _ChatSlot) -> None:
             return
     if any(other._binding is slot._binding for other in live):
         slot._binding = TranscriptBinding(
-            project=slot._binding.project, assigned=slot._binding.assigned
+            project=slot._binding.project,
+            assigned=slot._binding.assigned,
+            autocompact_pct=slot._binding.autocompact_pct,
         )
 
 

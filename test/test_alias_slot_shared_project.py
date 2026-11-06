@@ -60,6 +60,20 @@ def test_blank_alias_save_keeps_peer_project(tmp_path, monkeypatch):
     assert b.project == proj
 
 
+def test_a_stale_alias_save_keeps_the_peers_threshold(tmp_path, monkeypatch):
+    """The compaction threshold is held once too: no mirror copies it to the peer."""
+    state = _state(tmp_path, monkeypatch)
+    a = state.get_or_create_slot("a", linked_session_key=KEY)
+    a.autocompact_pct = 40.0
+    b = state.get_or_create_slot("b", linked_session_key=KEY)
+
+    _save_slot_to_history(state, a, force=True)
+    _save_slot_to_history(state, b, force=True)
+
+    assert state.conversation_log._read_metadata(KEY).get("autocompact_pct") == 40.0
+    assert b.autocompact_pct == 40.0
+
+
 def test_a_clear_on_one_alias_is_not_undone_by_the_peer(tmp_path, monkeypatch):
     """A real clear stays a clear: the peer's save must not restore the old directory."""
     state = _state(tmp_path, monkeypatch)
@@ -105,11 +119,13 @@ def test_a_slot_leaving_an_alias_group_keeps_its_value_and_stops_sharing(tmp_pat
     a = state.get_or_create_slot("a", linked_session_key=KEY)
     b = state.get_or_create_slot("b", linked_session_key=KEY)
     a.project = str(tmp_path / "p")
+    a.autocompact_pct = 40.0
 
     a.linked_session_key = "dashboard:elsewhere"
     bind_transcript(state, a)
 
     assert a.project == str(tmp_path / "p")
+    assert a.autocompact_pct == 40.0
     assert a._binding is not b._binding
     a.project = str(tmp_path / "q")
     assert b.project == str(tmp_path / "p")
@@ -171,8 +187,9 @@ def test_a_fresh_slot_holds_a_private_binding():
 def test_the_shallow_copy_paths_never_write_project():
     """Edit-resend and rewind ``copy.copy`` the slot; the copy shares the binding.
 
-    That is right, since the copy writes the same transcript, but it means a project
-    write on the copy would reach the live slot and every alias. Neither path writes one.
+    That is right, since the copy writes the same transcript, but it means a write of a
+    binding field on the copy would reach the live slot and every alias. Neither path
+    writes one.
     """
     for rel in ("dashboard/chat_regenerate.py", "dashboard/chat_rewind.py"):
         tree = ast.parse((_SRC / rel).read_text(encoding="utf-8"))
@@ -181,9 +198,10 @@ def test_the_shallow_copy_paths_never_write_project():
             for node in ast.walk(tree)
             if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign))
             for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
-            if isinstance(target, ast.Attribute) and target.attr in {"project", "_binding"}
+            if isinstance(target, ast.Attribute)
+            and target.attr in {"project", "autocompact_pct", "_binding"}
         ]
-        assert writes == [], f"{rel} writes project at lines {writes}"
+        assert writes == [], f"{rel} writes a binding field at lines {writes}"
 
 
 def test_copy_copy_shares_the_binding():
@@ -465,6 +483,39 @@ def test_a_restored_tab_seeds_an_unseeded_live_alias(tmp_path, monkeypatch):
 
     assert restored._binding is fallback._binding
     assert fallback.project == restored.project == str(tmp_path / "disk")
+
+
+def test_a_restored_tab_gives_an_unseeded_live_alias_its_threshold(tmp_path, monkeypatch):
+    from kiro_crew.dashboard.slot_persistence import metadata_codec as codec
+
+    state = _state(tmp_path, monkeypatch)
+    fallback = state.get_or_create_slot("workflow-r1", linked_session_key=KEY)
+    restored = state.get_or_create_slot("r")
+    codec.apply(
+        state,
+        restored,
+        {"linked_session_key": KEY, "autocompact_pct": 40.0},
+        codec.Restore(name="r"),
+    )
+
+    assert fallback.autocompact_pct == restored.autocompact_pct == 40.0
+
+
+def test_a_restored_tab_keeps_a_live_aliases_threshold(tmp_path, monkeypatch):
+    from kiro_crew.dashboard.slot_persistence import metadata_codec as codec
+
+    state = _state(tmp_path, monkeypatch)
+    live = state.get_or_create_slot("w", linked_session_key=KEY)
+    live.autocompact_pct = 40.0
+    restored = state.get_or_create_slot("r")
+    codec.apply(
+        state,
+        restored,
+        {"linked_session_key": KEY, "autocompact_pct": 70.0},
+        codec.Restore(name="r"),
+    )
+
+    assert live.autocompact_pct == restored.autocompact_pct == 40.0
 
 
 def test_a_restored_tab_keeps_a_live_aliases_clear(tmp_path, monkeypatch):

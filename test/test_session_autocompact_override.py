@@ -119,6 +119,20 @@ def _mock_state(slot: _ChatSlot | None = None) -> DashboardState:
     return state
 
 
+def _alias_state(key: str) -> tuple[_ChatSlot, _ChatSlot, DashboardState]:
+    """Two live slots on one transcript, joined the way every join site joins them."""
+    from kiro_crew.dashboard.transcript_binding import bind_transcript
+
+    a = _ChatSlot("tab-a")
+    b = _ChatSlot("tab-b")
+    a.linked_session_key = key
+    b.linked_session_key = key
+    state = _mock_state(a)
+    state._slots[b.key] = b
+    bind_transcript(state, b)
+    return a, b, state
+
+
 class TestAutocompactEndpoint:
     @pytest.mark.asyncio
     async def test_get_reports_override_global_and_range(self) -> None:
@@ -193,17 +207,15 @@ class TestAutocompactEndpoint:
         # Persisted through the SAME forced-save mechanism every other
         # slot-metadata route uses (tags / folders / pin), with the durable
         # write confirmed (best_effort=False) before the live gate moves, and
-        # the write pinned to the transcript the authorization covered. TWO
-        # awaits: the commit, then the post-mirror confirm save that orders
-        # the durable record after any interleaved stale sibling flush.
-        assert saver.await_count == 2
-        for call in saver.await_args_list:
-            assert call.args == (state, slot)
-            assert call.kwargs == {
-                "force": True,
-                "best_effort": False,
-                "expected_history_key": slot_history_key(slot),
-            }
+        # the write pinned to the transcript the authorization covered. One
+        # save: an alias reads the same field, so none can write it stale.
+        saver.assert_awaited_once_with(
+            state,
+            slot,
+            force=True,
+            best_effort=False,
+            expected_history_key=slot_history_key(slot),
+        )
 
     @pytest.mark.asyncio
     async def test_post_null_clears_back_to_global(self) -> None:
@@ -658,15 +670,10 @@ class TestAliasSlotsShareOneTranscript:
     """
 
     @pytest.mark.asyncio
-    async def test_commit_is_mirrored_to_alias_slots(self) -> None:
-        a = _ChatSlot("tab-a")
-        b = _ChatSlot("tab-b")
-        a.linked_session_key = "channel:shared:1"
-        b.linked_session_key = "channel:shared:1"
+    async def test_commit_is_the_alias_slots_value(self) -> None:
+        a, b, state = _alias_state("channel:shared:1")
         assert slot_history_key(a) == slot_history_key(b)
-        b.autocompact_pct = 40.0  # the stale sibling value a flush would persist
-        state = _mock_state(a)
-        state._slots[b.key] = b
+        b.autocompact_pct = 40.0  # the group's value before the request
         with patch(
             "kiro_crew.dashboard.chat_handlers.save_slot_off_loop",
             new=AsyncMock(return_value=True),
@@ -680,7 +687,7 @@ class TestAliasSlotsShareOneTranscript:
         assert b.autocompact_pct == 60.0
 
     @pytest.mark.asyncio
-    async def test_unrelated_slot_is_not_mirrored(self) -> None:
+    async def test_unrelated_slot_keeps_its_threshold(self) -> None:
         a = _ChatSlot("tab-a")
         other = _ChatSlot("tab-c")
         other.autocompact_pct = 40.0
@@ -694,6 +701,41 @@ class TestAliasSlotsShareOneTranscript:
                 resp = await client.post("/api/chat/slots/tab-a/autocompact", json={"pct": 60})
                 assert resp.status == 200
         assert other.autocompact_pct == 40.0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("saved", [False, True], ids=["refused", "committed"])
+    @pytest.mark.parametrize("new_peer_pct", [50.0, None], ids=["live-peer", "no-peer"])
+    async def test_a_rebind_during_the_save_leaves_each_transcript_its_own_value(
+        self, new_peer_pct: float | None, saved: bool
+    ) -> None:
+        from kiro_crew.dashboard.transcript_binding import bind_transcript
+
+        a, b, state = _alias_state("channel:shared:5")
+        b.autocompact_pct = 40.0
+        if new_peer_pct is not None:
+            c = _ChatSlot("tab-c")
+            c.linked_session_key = "channel:other:5"
+            c.autocompact_pct = new_peer_pct
+            state._slots[c.key] = c
+
+        async def _rebind_during_save(*args, **kwargs):
+            a.linked_session_key = "channel:other:5"
+            bind_transcript(state, a)
+            return saved
+
+        with patch(
+            "kiro_crew.dashboard.chat_handlers.save_slot_off_loop",
+            new=AsyncMock(side_effect=_rebind_during_save),
+        ):
+            async with TestClient(TestServer(_make_app(state))) as client:
+                resp = await client.post("/api/chat/slots/tab-a/autocompact", json={"pct": 60})
+                assert resp.status == 409
+        # The transcript the slot left keeps what its line holds: the commit, or
+        # the old value when the save was refused.
+        assert b.autocompact_pct == (60.0 if saved else 40.0)
+        # The rebound slot holds the new transcript's value, or with no peer there,
+        # the value it held before the request: never this request's 60.
+        assert a.autocompact_pct == (40.0 if new_peer_pct is None else new_peer_pct)
 
     def test_alias_slots_resolve_to_one_lock(self) -> None:
         from kiro_crew.dashboard.chat_handlers import _autocompact_txn_lock
@@ -839,21 +881,16 @@ class TestMidPersistRebindDoesNotSeedForeignSession:
 
 
 class TestSiblingFlushCannotStaleTheCommit:
-    """The durable record must be re-confirmed AFTER the alias mirror.
+    """An alias's save reads the value being committed, never an older copy.
 
-    A sibling's queued flush can write a stale field over the commit, so a confirm save
-    runs after the mirror. The commit save sees the sibling stale, the confirm mirrored.
+    Aliases hold the threshold in one shared binding, so the field every alias's save
+    reads under the transcript lock is the one the request set.
     """
 
     @pytest.mark.asyncio
-    async def test_confirm_save_runs_after_the_mirror(self) -> None:
-        a = _ChatSlot("tab-a")
-        b = _ChatSlot("tab-b")
-        a.linked_session_key = "channel:shared:3"
-        b.linked_session_key = "channel:shared:3"
-        b.autocompact_pct = 40.0  # the stale value an interleaved flush writes
-        state = _mock_state(a)
-        state._slots[b.key] = b
+    async def test_an_alias_reads_the_committed_value_during_the_save(self) -> None:
+        a, b, state = _alias_state("channel:shared:3")
+        b.autocompact_pct = 40.0
         sibling_pct_at_save: list = []
 
         async def _record_sibling(*args, **kwargs):
@@ -867,32 +904,22 @@ class TestSiblingFlushCannotStaleTheCommit:
             async with TestClient(TestServer(_make_app(state))) as client:
                 resp = await client.post("/api/chat/slots/tab-a/autocompact", json={"pct": 60})
                 assert resp.status == 200
-        # Commit save ran BEFORE the mirror (sibling still stale), confirm
-        # save ran AFTER it (sibling mirrored) — so any stale flush the file
-        # lock interleaved between them is durably overwritten by the confirm.
-        assert sibling_pct_at_save == [40.0, 60.0]
+        assert sibling_pct_at_save == [60.0]
 
     @pytest.mark.asyncio
-    async def test_confirm_refusal_rolls_back_the_mirror(self) -> None:
-        """A refused confirm save must undo the sibling mirror, not leak it."""
-        a = _ChatSlot("tab-a")
-        b = _ChatSlot("tab-b")
-        a.linked_session_key = "channel:shared:4"
-        b.linked_session_key = "channel:shared:4"
+    async def test_a_refused_commit_rolls_the_group_back(self) -> None:
+        a, b, state = _alias_state("channel:shared:4")
         b.autocompact_pct = 40.0
-        state = _mock_state(a)
-        state._slots[b.key] = b
 
         with patch(
             "kiro_crew.dashboard.chat_handlers.save_slot_off_loop",
-            new=AsyncMock(side_effect=[True, False]),
+            new=AsyncMock(return_value=False),
         ):
             async with TestClient(TestServer(_make_app(state))) as client:
                 resp = await client.post("/api/chat/slots/tab-a/autocompact", json={"pct": 60})
                 assert resp.status == 409
-        assert b.autocompact_pct == 40.0, "refused transaction leaked the mirror to a sibling"
-        assert b._dirty is True, "sibling flush must reconverge the durable record"
-        assert a.autocompact_pct is None
+        assert a.autocompact_pct == 40.0
+        assert b.autocompact_pct == 40.0, "refused transaction leaked the value to a sibling"
         state.sessions.set_autocompact_pct.assert_not_called()
 
 

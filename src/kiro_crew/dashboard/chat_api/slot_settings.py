@@ -155,8 +155,20 @@ async def api_chat_slot_autocompact(request: web.Request) -> web.Response:
             return web.json_response(
                 {"error": "session was deleted or rebound", "code": "session_gone"}, status=409
             )
+        # The field lives in the binding every live alias on this transcript
+        # shares (``transcript_binding.py``), so this write is the group's. A
+        # rebind during an await can carry the value onto the slot's next
+        # binding, so ``_undo`` takes it back from each binding still holding
+        # this request's value, by identity like the project rollback.
+        binding = slot._binding
         prior_pct = slot.autocompact_pct
         slot.autocompact_pct = pct
+
+        def _undo(*cells: Any) -> None:
+            for cell in cells:
+                if cell.autocompact_pct is pct:
+                    cell.autocompact_pct = prior_pct
+
         if state.conversation_log:
             try:
                 applied = await save_slot_off_loop(
@@ -171,7 +183,7 @@ async def api_chat_slot_autocompact(request: web.Request) -> web.Response:
                 # periodic flush reconverges the durable record to the live
                 # field (a non-endpoint save may have durably written this
                 # rejected value before the failure).
-                slot.autocompact_pct = prior_pct
+                _undo(binding, slot._binding)
                 slot._dirty = True
                 logger.exception("Slot %s autocompact_pct persist failed", name)
                 return web.json_response(
@@ -183,61 +195,7 @@ async def api_chat_slot_autocompact(request: web.Request) -> web.Response:
                 # or the routing-moved pin (slot rebound to another transcript
                 # mid-request). Do not resurrect, do not write elsewhere, do not
                 # mutate live state.
-                slot.autocompact_pct = prior_pct
-                return web.json_response(
-                    {"error": "session was deleted or rebound", "code": "session_gone"}, status=409
-                )
-            # Mirror the COMMITTED value to every live slot whose current
-            # transcript key is the one this write landed on — not just the
-            # requesting slot: channel-linked aliases resolve distinct slot
-            # names onto one file, and a sibling left holding the old value
-            # would persist it back over this acknowledged commit on its next
-            # flush (its ordinary save writes ``autocompact_pct``
-            # unconditionally from its own field). Membership is re-derived
-            # here, NOT assumed: a slot rebound during the persist does not
-            # write this file, and mirroring it would apply a live change its
-            # reauthorization is about to deny. Snapshot values() — the event
-            # loop may mutate the dict between iterations. Priors are recorded
-            # so the confirm-save failure paths below can undo the mirror.
-            mirrored: list = []
-            for other in list(state._slots.values()):
-                if other is not slot and slot_history_key(other) == authorized_history_key:
-                    mirrored.append((other, other.autocompact_pct))
-                    other.autocompact_pct = pct
-            # The mirror runs on the event loop AFTER the persist returned, but
-            # a sibling's already-queued flush can acquire the transcript's
-            # file lock in the executor BEFORE the loop resumes here and write
-            # its then-stale field over the acknowledged commit (executor
-            # threads do not wait for the event loop). The mirror above fixes
-            # every live field; this second confirmed save re-orders the
-            # durable record after any such interleaved stale write — the file
-            # lock serializes it behind the sibling's write, and every field it
-            # can read is now the committed value. Same pin, same dispositions.
-            try:
-                confirmed = await save_slot_off_loop(
-                    state,
-                    slot,
-                    force=True,
-                    best_effort=False,
-                    expected_history_key=authorized_history_key,
-                )
-            except Exception:
-                for other, other_prior in mirrored:
-                    if slot_history_key(other) == authorized_history_key:
-                        other.autocompact_pct = other_prior
-                        other._dirty = True
-                slot.autocompact_pct = prior_pct
-                slot._dirty = True
-                logger.exception("Slot %s autocompact_pct confirm-persist failed", name)
-                return web.json_response(
-                    {"error": "could not persist threshold", "code": "persist_failed"}, status=500
-                )
-            if not confirmed:
-                for other, other_prior in mirrored:
-                    if slot_history_key(other) == authorized_history_key:
-                        other.autocompact_pct = other_prior
-                        other._dirty = True
-                slot.autocompact_pct = prior_pct
+                _undo(binding, slot._binding)
                 return web.json_response(
                     {"error": "session was deleted or rebound", "code": "session_gone"}, status=409
                 )
@@ -245,10 +203,12 @@ async def api_chat_slot_autocompact(request: web.Request) -> web.Response:
         # authorization decision with NO await between them. The persist await is
         # a rebind window (same mechanism as the body read), so re-decide before
         # the live override mutation; the slot-field change above rolls back for
-        # a rebound slot, whose successor re-derives its state on restore.
+        # a rebound slot, whose successor re-derives its state on restore. The
+        # write has committed, so a binding the slot left keeps the commit for
+        # the transcript it landed on.
         stale = _reauthorize_after_await(state, slot, name, request_app, "slot_autocompact")
         if stale is not None:
-            slot.autocompact_pct = prior_pct
+            _undo(slot._binding)
             return stale
         # Reauthorization can PASS after a rebind the pin never saw: a rebind
         # landing after the save's internal routing read leaves the durable
@@ -256,10 +216,10 @@ async def api_chat_slot_autocompact(request: web.Request) -> web.Response:
         # resolves to a different session the caller may also own. Seeding the
         # live map from effective_session_key(slot) would then apply the
         # threshold to a session whose transcript never received it. Refuse:
-        # the committed transcript's siblings were mirrored above and its live
-        # override re-seeds on hydration; this slot's successor re-derives.
+        # the committed transcript's live aliases hold the committed value and
+        # its live override re-seeds on hydration; this slot's successor re-derives.
         if slot_history_key(slot) != authorized_history_key:
-            slot.autocompact_pct = prior_pct
+            _undo(slot._binding)
             return web.json_response(
                 {"error": "session was deleted or rebound", "code": "session_gone"}, status=409
             )
