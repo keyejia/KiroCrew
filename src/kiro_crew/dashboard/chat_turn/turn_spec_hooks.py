@@ -770,6 +770,8 @@ async def _fire(
         # at fire time: a reset gives the session a new one. Empty before
         # session/new, and then the spec hooks get none.
         _acp_sid = getattr(turn.client, "session_id", "") if turn._spec_hooks else ""
+        # Read at fire time too: a model pick or a fallback swap changes it.
+        _model = getattr(turn.client, "served_model", "")
         results = await state._hook_store.fire(
             event,
             context,
@@ -787,6 +789,7 @@ async def _fire(
             extra_hooks_tool_names=_spec_tool_names,
             tool_match_names=_match_names,
             acp_session_id=_acp_sid if isinstance(_acp_sid, str) and _acp_sid else None,
+            session_model=_model if isinstance(_model, str) and _model else None,
         )
         for r in results:
             # Anchoring rule for the bounded hook excerpts below: text the

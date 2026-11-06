@@ -311,6 +311,14 @@ the session's ACP id, as `KIRO_SESSION_ID` in the environment and as
 them are left out. A subagent's Stop hooks get it too. Hooks-page hooks and
 other subagent events do not.
 
+When a dashboard chat fires them, Hooks-page hooks and the agent spec hooks
+Kiro Crew runs in the harness's place (as on KAS) also get
+`KIROCREW_SESSION_MODEL`: the model that session runs on, read when the hook
+fires, so a model switch shows from the next hook on. It is left out while the
+session has not reported a model, as on Auto, where the server picks one per
+turn. Spec hooks kiro-cli runs itself, channel turns and subagent runs do not
+get it.
+
 **A hook does not inherit the gateway's environment.** The gateway process holds
 provider keys and tokens, so a hook subprocess gets an allowlisted slice instead
 — `PATH`, the home and temp directories, locale, TLS trust, and `KIROCREW_HOME`.

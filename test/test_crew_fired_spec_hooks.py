@@ -555,6 +555,30 @@ def test_the_chat_turn_hands_the_spec_hooks_its_session_id(sid, expected):
     assert seen["acp_session_id"] == expected
 
 
+@pytest.mark.parametrize(("served", "expected"), [("model-x", "model-x"), ("", None)])
+def test_the_chat_turn_hands_its_hooks_the_served_model(served, expected):
+    from kiro_crew.dashboard.chat_turn import turn_spec_hooks
+
+    seen: dict = {}
+
+    class _Store:
+        async def fire(self, *a, **kw):
+            seen.update(kw)
+            return []
+
+    turn = SimpleNamespace(
+        session_key="dashboard:1",
+        slot=SimpleNamespace(key="1"),
+        state=SimpleNamespace(_hook_store=_Store()),
+        client=SimpleNamespace(session_id="", served_model=served),
+        _spec_hooks=[],
+        _spec_hooks_unreadable=False,
+        _spec_hooks_cwd=None,
+    )
+    asyncio.run(turn_spec_hooks._fire(turn, HOOK_EVENT_USER_PROMPT_SUBMIT, "hi"))
+    assert seen["session_model"] == expected
+
+
 def test_a_governance_denied_spec_hook_does_not_spawn(tmp_path, monkeypatch):
     monkeypatch.setattr(hooks_mod, "_script_hooks_capability_denied", lambda sk="": "off")
 

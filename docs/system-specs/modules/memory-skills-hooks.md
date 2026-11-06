@@ -6437,6 +6437,17 @@ a hook is therefore **not portable across platforms**. A stored PreToolUse hook'
 Both platforms receive the same `KIROCREW_HOOK_EVENT` / `KIROCREW_HOOK_CONTEXT`
 env vars and the same hook-event JSON on stdin.
 
+**`KIROCREW_SESSION_MODEL`** is the model the firing session runs on, passed to
+`fire()` as `session_model` and set on every hook that fire runs, stored and
+`extra_hooks` alike; a spec hook kiro-cli runs itself is outside that fire and
+does not get it. A dashboard chat turn passes its provider's public
+`served_model`, read at fire time (`turn_spec_hooks._fire`, and the tool-call
+frame's `fire_tool_hooks` in `tool_rows`), so a live pick or a fallback swap
+reaches the next hook. That accessor answers `""` for the `auto` sentinel and
+before the backend reports a model, and the variable is then unset. Channel
+turns, subagent runs and the other `fire_tool_hooks` callers pass none. The name
+is Kiro Crew's own: kiro-cli defines no model variable, unlike `KIRO_SESSION_ID`.
+
 **Attribution keys in the stdin JSON.** Beyond `hook_event_name`, `cwd` and the
 event's own fields (`prompt`, `tool_name`, `tool_input`, `tool_response`,
 `assistant_text`), `ScriptHookStore.fire()` stamps these only when the caller
@@ -6465,7 +6476,8 @@ into every hook command would hand an untrusted shell line those secrets. The
 allowlist (`_HOOK_BASE_ENV_KEYS` in `hooks.py`) preserves only what a hook
 legitimately needs — `PATH`/`PATHEXT`/`COMSPEC`/`SYSTEMROOT`, the home/profile and
 `KIROCREW_HOME` data-home vars, temp-dir and locale vars, and TLS-trust
-(`SSL_CERT_*`, `NO_PROXY`) — plus the two `KIROCREW_HOOK_*` metadata vars set last.
+(`SSL_CERT_*`, `NO_PROXY`) — plus the hook-metadata vars set last (`KIROCREW_HOOK_*`,
+and `KIRO_SESSION_ID` / `KIROCREW_SESSION_MODEL` when known).
 `HTTP(S)_PROXY` is deliberately dropped (it commonly embeds userinfo credentials).
 The consequence for operators: a hook that relied on an ambient var outside that
 set (e.g. `VIRTUAL_ENV`, `PYTHONPATH`, `JAVA_HOME`, `AWS_PROFILE`, nvm/pyenv vars)
