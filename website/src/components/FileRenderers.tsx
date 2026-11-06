@@ -12,6 +12,7 @@ import { fileStreamUrl, fileOfficePreviewUrl, fileOfficeSlidesUrl, fileOfficeSli
 import { sendErrorToChat } from '../utils/errorReport'
 import { useLanguageGeneration } from '../i18n/useLanguageGeneration'
 import { useIsDark } from '../hooks/useIsDark'
+import { usePinchZoom, wheelZoomFactor } from '../hooks/usePinchZoom'
 import { pathBasename } from '../utils/pathBasename'
 import { AUDIO_EXTS, VIDEO_EXTS } from '../utils/mediaExts'
 import { guideUntrusted, stripGuideMarkers } from '../guide/untrustedContent'
@@ -130,20 +131,96 @@ function ViewerBackdrop({ children, render }: {
   )
 }
 
-/* ── Image viewer ── */
+/* ── Image viewer ──
+ * Alt/Opt+wheel zooms about the cursor and a drag pans a zoomed image. The view
+ * is kept per file for this tab, in memory only, and dropped when the file's
+ * pixel size changes: the old zoom and pan no longer map onto the new image. A
+ * view at fit is the default, so only zoomed views are kept. */
+const IMAGE_ZOOM_MAX = 8
+const imageViews = new Map<string, { w: number; h: number; zoom: number; pan: { x: number; y: number } }>()
+
 export const ImageViewer = memo(function ImageViewer({ filePath }: { filePath: string }) {
   useLanguageGeneration() // memo() bails out of the provider-level repaint; subscribe directly
+  // Keyed so another file starts from its own view, never the previous file's.
+  return <ZoomableImage key={filePath} filePath={filePath} />
+})
+
+function ZoomableImage({ filePath }: { filePath: string }) {
+  const boxRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const sizeRef = useRef<{ w: number; h: number } | null>(null)
+  const dragRef = useRef<{ x: number; y: number; pan: { x: number; y: number } } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  // `enabled: false`: this viewer claims Alt+wheel below, not the hook's ctrl+wheel
+  // and trackpad pinch, which stay the browser's page zoom here.
+  const { zoom, setZoom, pan, setPan, clampPan, zoomAbout } = usePinchZoom({
+    targetRef: imgRef, containRef: boxRef, enabled: false, min: 1, max: IMAGE_ZOOM_MAX,
+  })
+  const zoomed = zoom > 1
+
+  // Not a React prop: React binds `wheel` passively, so preventDefault there
+  // would not stop the pane from scrolling.
+  useEffect(() => {
+    const box = boxRef.current
+    if (!box) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.altKey) return
+      e.preventDefault()
+      zoomAbout(wheelZoomFactor(e), e.clientX, e.clientY)
+    }
+    box.addEventListener('wheel', onWheel, { passive: false })
+    return () => box.removeEventListener('wheel', onWheel)
+  }, [zoomAbout])
+
+  useEffect(() => {
+    const size = sizeRef.current
+    if (!size) return
+    if (zoom > 1) imageViews.set(filePath, { ...size, zoom, pan })
+    else imageViews.delete(filePath)
+  }, [filePath, zoom, pan])
+
+  const onLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const size = { w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight }
+    sizeRef.current = size
+    const saved = imageViews.get(filePath)
+    if (!saved) return
+    if (saved.w !== size.w || saved.h !== size.h) { imageViews.delete(filePath); return }
+    // Unclamped: a tab restored while hidden has no layout box to clamp against.
+    setZoom(saved.zoom)
+    setPan(saved.pan)
+  }
+  const endDrag = () => { dragRef.current = null; setDragging(false) }
+
   return (
     <ViewerBackdrop>
-      <img
-        src={'/api/file-raw?path=' + encodeURIComponent(filePath)}
-        alt={pathBasename(filePath)}
-        className="max-w-full max-h-full object-contain"
-        draggable={false}
-      />
+      <div ref={boxRef} className="flex items-center justify-center w-full h-full overflow-hidden">
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- `onLoad` is a resource event that reads the image's pixel size, not a user interaction. */}
+        <img
+          ref={imgRef}
+          src={'/api/file-raw?path=' + encodeURIComponent(filePath)}
+          alt={pathBasename(filePath)}
+          className={`max-w-full max-h-full object-contain ${zoomed ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : ''}`}
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+          draggable={false}
+          onLoad={onLoad}
+          onPointerDown={e => {
+            if (!zoomed || e.button !== 0) return
+            e.preventDefault()
+            e.currentTarget.setPointerCapture(e.pointerId)
+            dragRef.current = { x: e.clientX, y: e.clientY, pan }
+            setDragging(true)
+          }}
+          onPointerMove={e => {
+            const d = dragRef.current
+            if (d) setPan(clampPan(d.pan.x + e.clientX - d.x, d.pan.y + e.clientY - d.y))
+          }}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+        />
+      </div>
     </ViewerBackdrop>
   )
-})
+}
 
 /* ── Inline SVG viewer (content-string-based) ─────────────────────────────
  * Used for artifact `kind: svg` where the SVG XML lives in the artifact
