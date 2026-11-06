@@ -6,6 +6,7 @@ import { namedCeiling } from './namedCeiling'
 import ChatInput from '../components/ChatInput'
 import { ComposerVoiceSliceOverride } from '../chat-core/composer/Composer'
 import { api } from '../api/client'
+import { crewLogProjectionsKey } from '../hooks/websocket/sessionProjection'
 import { SlotProvider } from '../providers/SlotContext'
 import type { PasteBlock } from '../utils/pasteTokens'
 
@@ -665,6 +666,16 @@ describe('ChatInput context-usage popover', () => {
   // The popover has no heading; its "Remaining" row is the open/closed signal.
   const base = { value: '', onChange: vi.fn(), onSend: vi.fn(), onProjectClick: vi.fn() }
 
+  /** A crew-log read carrying only the `usage` fold, with these token counts. The
+   *  default is how a backend that reports no counts (kiro-cli) folds: four zeros. */
+  const usageRead = (tokens: Record<string, number> = { input: 0, output: 0, cache_read: 0, cache_write: 0 }) =>
+    ({ folds: { usage: { name: 'usage', seq: 1, revision: 1, value: { tokens } } } }) as unknown as Awaited<ReturnType<typeof api.sessionCrewLogProjections>>
+  // Opening the popover on a slot reads the session's crew log for the cache hit
+  // rate; answered here so no test in this block reaches the network.
+  beforeEach(() => {
+    vi.spyOn(api, 'sessionCrewLogProjections').mockResolvedValue(usageRead())
+  })
+
   it('opens a breakdown with used and remaining token counts', () => {
     renderWithProviders(
       <ChatInput {...base} contextPct={42} contextWindowTokens={200_000} contextUsedTokens={84_000} />,
@@ -904,5 +915,44 @@ describe('ChatInput context-usage popover', () => {
     resolveFirst({ ok: true, pct: null, global_pct: 70 })
     await waitFor(() => expect(post).toHaveBeenCalledTimes(2), { timeout: 1500 })
     expect(post).toHaveBeenLastCalledWith('test-slot', 71)
+  })
+
+  // ── prompt-cache hit rate (read from the session's crew log) ─────────────
+
+  const CACHE_KEY = crewLogProjectionsKey('test-slot')
+  const REPORTING = { input: 100, output: 50, cache_read: 750, cache_write: 150 }
+  const openOnSlot = () => {
+    vi.spyOn(api, 'chatSlotAutocompact').mockResolvedValue({ pct: null, global_pct: 70, min: 5, max: 90 })
+    const view = renderWithSlot(<ChatInput {...base} contextPct={42} contextWindowTokens={200_000} contextUsedTokens={84_000} />)
+    fireEvent.click(screen.getByLabelText('Context usage'))
+    return view
+  }
+
+  it('shows the share of the prompt served from the cache: reads over reads, writes and uncached input', async () => {
+    vi.spyOn(api, 'sessionCrewLogProjections').mockResolvedValue(usageRead(REPORTING))
+    openOnSlot()
+    // Waits for the crew-log read the popover starts on open.
+    const row = await screen.findByTestId('context-cache-hit-rate', {}, { timeout: 5000 })
+    // 750 / (750 + 150 + 100); output tokens are not part of the prompt.
+    expect(within(row).getByText('75%')).toBeInTheDocument()
+    expect(within(row).getByText('Share of the prompt reused from cache')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['a backend that reports no token counts', () => Promise.resolve(usageRead()), 'success'],
+    ['input tokens with no cache count', () => Promise.resolve(usageRead({ input: 400, output: 90, cache_read: 0, cache_write: 0 })), 'success'],
+    ['a failed read', () => Promise.reject(new Error('offline')), 'error'],
+  ] as const)('draws no rate, and never a zero rate, for %s', async (_name, answer, settled) => {
+    vi.spyOn(api, 'sessionCrewLogProjections').mockImplementation(answer)
+    const { queryClient } = openOnSlot()
+    // The positive signal: the read the popover started has settled.
+    await waitFor(() => expect(queryClient.getQueryState(CACHE_KEY)?.status).toBe(settled), { timeout: 5000 })
+    expect(screen.queryByTestId('context-cache-hit-rate')).toBeNull()
+    expect(screen.queryByText('0%')).toBeNull()
+    // The control: the same open popover draws the rate once the fold carries
+    // cache counts, so the absence above is the data's doing.
+    act(() => { queryClient.setQueryData(CACHE_KEY, usageRead(REPORTING)) })
+    const row = await screen.findByTestId('context-cache-hit-rate', {}, { timeout: 5000 })
+    expect(within(row).getByText('75%')).toBeInTheDocument()
   })
 })
