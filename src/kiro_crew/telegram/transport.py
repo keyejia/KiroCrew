@@ -15,6 +15,7 @@ authorize nobody (fail closed), never everybody.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
@@ -31,9 +32,11 @@ from kiro_crew.messaging.transport import (
 from kiro_crew.sel import sel
 from kiro_crew.telegram.client import (
     TELEGRAM_CHUNK_LIMIT,
+    TELEGRAM_MAX_TEXT,
     TelegramClient,
     TelegramInbound,
 )
+from kiro_crew.telegram.renderer import md_to_telegram_html_safe
 
 logger = logging.getLogger(__name__)
 
@@ -350,6 +353,25 @@ class TelegramTransport(MessagingTransport):
             message_thread_id=int(thread_id) if thread_id else None,
         )
         return str(mid or "")
+
+    async def send_markdown(
+        self, conversation_id: str, content: str, thread_id: str | None = None
+    ) -> str:
+        # Rendered to Telegram HTML. A render that outgrows one message (the cap
+        # would cut its tail) or that Telegram refuses goes out as the plain send
+        # instead, never as raw tags, the same fallback the renderer's seal takes.
+        html_text = await asyncio.to_thread(md_to_telegram_html_safe, content)
+        if len(html_text) <= TELEGRAM_MAX_TEXT:
+            mid = await self._client.send_message(
+                int(conversation_id),
+                html_text,
+                parse_mode="HTML",
+                retry_plain=False,
+                message_thread_id=int(thread_id) if thread_id else None,
+            )
+            if mid:
+                return str(mid)
+        return await self.send_message(conversation_id, content, thread_id=thread_id)
 
     async def send_document(
         self,
