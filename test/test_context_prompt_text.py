@@ -222,3 +222,34 @@ def test_critical_rules_forbid_assuming_a_persons_gender():
     rule = "Do not assume anyone's gender."
     assert rule in _CRITICAL_RULES
     assert rule in _CRITICAL_RULES_CHANNEL
+
+
+@pytest.mark.parametrize(
+    ("agent", "session_key"),
+    [
+        ("kirocrew", "dashboard:a"),
+        ("kirocrew-conductor", "dashboard:b"),
+        ("kirocrew-pipeline-conductor", "dashboard:c"),
+        ("kirocrew-worker", "dashboard:d"),
+        ("kirocrew-mate-conductor", "dashboard:e"),
+        ("kirocrew-mate-worker", "dashboard:f"),
+        ("kirocrew-worker", "cron:g"),
+        ("kirocrew", "subagent:h"),
+    ],
+)
+def test_shared_base_rules_tell_every_crew_agent_to_ask_only_when_needed(
+    tmp_path, monkeypatch, agent, session_key
+):
+    """Conductor, worker, Bot and Ultra Mode all start from the critical-rules block."""
+    from kiro_crew import context as ctx_mod
+
+    rule = "Ask a person only when human involvement is truly required."
+    for variant in ctx_mod._CRITICAL_RULES_VARIANTS:
+        assert rule in variant
+    monkeypatch.setattr(ctx_mod, "_INCLUDE_CREW_CONTEXT_CACHE", {})
+    builder = ContextBuilder(
+        memory=MemoryStore(workspace=tmp_path / "ws"),
+        skills=SkillsLoader(skills_path=tmp_path / "skills", install_builtins=False),
+    )
+    ctx = builder.build_session_context(agent=agent, session_key=session_key)
+    assert rule in ctx

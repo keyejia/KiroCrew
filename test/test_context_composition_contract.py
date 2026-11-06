@@ -104,9 +104,9 @@ _STABLE_TEXT = {
 
 _STABLE_TEXT_SHA256 = {
     "context_scope_all_withheld": "98ed04f8fca6f805d76f7fd3f518c63f221d5af6da6636fd30b28dc217207a0a",
-    "critical_rules": "16827ce030089653769a3f16a6fb96e6c9fcda799ef4750630080011b5ac1647",
-    "critical_rules_channel": "7b7ea4db70ccbc233959938b561281591e3b3c26544b383046942ce229eacf7e",
-    "critical_rules_subagent": "9eaa81827b3b0cb392286aa21837b6c17014e0abce484d2013150535102104c9",
+    "critical_rules": "f3300018b1e2356c185fb7c1aef8ce2b76c067ebc920e522d8ee735da4421233",
+    "critical_rules_channel": "38e37f23780f541da1a931328714c976b91327cdca2c1475c08ef582bc7e8472",
+    "critical_rules_subagent": "fc98b3f353ffce22dfa45e148782e1b4d944fffc859feba95e6e5823e0dd5df8",
     "docs_section": "971b6008afbd9ff048c498c06cffecc6dafc7a58b0df75ff9db0b15cf9e26c09",
     "member_how_you_work": "df9ee9aff3939ab17a682684f48cd06a091911e3e5774bfc3fce764809b7b946",
     "member_how_you_work_unavailable": "b38545643c06e143e9fe9082e41aa589a13a7082345e0323b21a2a4cfbb9bbf9",
