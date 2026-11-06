@@ -779,6 +779,25 @@ async def run(self: GatewayOrchestrator) -> None:
         )
         raise SystemExit(1)
 
+    # ── One-time keystone content-provenance adoption ──
+    # Endorse the current bytes of each sealed keystone file that has NO endorsed copy
+    # yet, BEFORE any session or sandbox spawns, so an operator's existing settings
+    # survive the first boot after upgrade. A file that differs from an existing copy
+    # is never adopted here: it stays pending for the owner to apply or discard in
+    # Settings (dashboard/handlers/config_pending.py). This is the shared gateway entry
+    # both the CLI (run_gateway) and the in-process test gateway reach. Off-loop: small
+    # file reads/writes under the data home. Best-effort; a failure leaves a file
+    # un-adopted, which then loads as written.
+    from kiro_crew.config import loosening_provenance
+
+    try:
+        _adopted = await asyncio.to_thread(loosening_provenance.adopt_unendorsed)
+    except Exception:
+        logger.debug("keystone provenance adoption failed", exc_info=True)
+        _adopted = []
+    if _adopted:
+        logger.info("Adopted keystone files as endorsed (one-time): %s", ", ".join(_adopted))
+
     # Refuse to boot on a truncated signing key (see signing_key_preflight).
     # Off-loop for the same reason as the persistence probe, and bounded: a
     # key leaf on a disconnected mount must refuse the boot, not stall it.

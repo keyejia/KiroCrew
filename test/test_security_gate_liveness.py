@@ -691,7 +691,10 @@ def _url_payload_command(n: int) -> str:
 #: Raised by 34, from 34,699, to the package's measured size on main: the 175 above
 #: were counted on a base without the security fixes that merged before it, so main
 #: landed over budget. No code changes; nothing is relaxed. Re-measured.
-_PACKAGE_LINE_BUDGET = 34_733
+#: Raised by 20, from 34,733, to the package's measured size on main again (a git
+#: publish check landed over budget), and by 4 more for the two endorsed-copy leaves on the
+#: read+write floor in ``paths_lists`` (copies of leaves already there). Re-measured.
+_PACKAGE_LINE_BUDGET = 34_757
 
 #: Ceiling on any ONE file in the package. This is what the bound is really for --
 #: a package total says nothing about a single file growing back into a second

@@ -371,8 +371,8 @@ class TestSeedCreateThenOpenRemovalWindow:
         ) -> None:
             if name == "workspace":
                 attempts.append(1)
-                (home / "config.json").unlink()
-                os.rmdir(home)
+                # The config rewrite already ran: its endorsed copy lives in the home too.
+                shutil.rmtree(home)
             real_mkdir(name, mode, dir_fd=dir_fd)  # type: ignore[arg-type]
 
         monkeypatch.setattr(os, "mkdir", removing_the_home)

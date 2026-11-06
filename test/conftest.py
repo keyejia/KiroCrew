@@ -610,6 +610,21 @@ def _registry_governance_reachability_unknown(_floor_monkeypatch):
     _floor_monkeypatch.setattr(kiro_cli, "_governance_warm_running", False)
 
 
+@pytest.fixture(autouse=True)
+def _config_content_check_off_unless_a_test_turns_it_on(_floor_monkeypatch):
+    """Answer "this host cannot build the namespace sandbox" for the config content check.
+
+    The real answer probes the runner's user namespaces, so whether every config read
+    serves the endorsed copy would differ between a userns-capable laptop and a CI
+    runner that refuses them, and the probe would spawn a child under whatever
+    ``subprocess`` stub the test installed. The provenance tests force the check on
+    with ``monkeypatch.setattr(lp, "enforcement_active", ...)``.
+    """
+    from kiro_crew.config import loosening_provenance
+
+    _floor_monkeypatch.setattr(loosening_provenance, "_host_verdict", False)
+
+
 @pytest.fixture
 def fresh_darwin_libc_handles(_floor_monkeypatch):
     """Start the test with both macOS libc handle caches unbuilt, and put them back after.

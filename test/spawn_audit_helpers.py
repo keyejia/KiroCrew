@@ -506,6 +506,11 @@ BENIGN_PACKAGE_SPAWNS: frozenset[str] = frozenset(
         # at the end.
         "dashboard_verify.py::_spawn",
         "cli_knowledge.py::_consolidate_cmd",
+        # ``kirocrew config edit``: the operator's own ``$EDITOR`` on a private copy of
+        # config.json, run in the foreground and waited on so the result can be saved
+        # through the config writer. It replaces an ``os.execvp`` of the same editor on
+        # the file itself; the only argument is the copy's path.
+        "cli_config.py::_config_edit",
         "cli.py::_ensure_node",
         "cli.py::_node_ok",
         "cli.py::main",

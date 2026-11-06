@@ -662,7 +662,7 @@ they come from:
 | `runtime_ports` | `derive_port`, the recorded-claim scan and `allocate_port` |
 | `runtime_attestation` | `port_owner`: the gateway PID record against the service manager's `MainPID`, with listener corroboration (`OWNER_FOREIGN` only when listeners exist and none is the pod's) |
 | `runtime_client` | `health`, `published_credential`, `mint_token` and `pod_api`, each gated on that verdict |
-| `runtime_home` | fixture seeding, the OS home and runtime auth store, `cleanup_home`, `orphan_homes` |
+| `runtime_home` | fixture seeding, the OS home and runtime auth store, `cleanup_home`, `orphan_homes`; the seeded `config.json` text comes from `pod.seed_config` (not an owner: `runtime` forwards none of its names) |
 | `runtime_lifecycle` | `start_pod`, `stop_pod` (drain, reclaim, verify), `halt_pod` (stop only, HOME kept) and `install_backend` |
 | `runtime_boot` | `boot`, `pod exec` and the terminal-refusal record |
 

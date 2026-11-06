@@ -24,14 +24,15 @@ from pathlib import Path
 
 from kiro_crew import pinned_fs
 from kiro_crew import seed as seed_mod
-from kiro_crew import user_json
-from kiro_crew.atomic_write import atomic_write_at
+from kiro_crew.atomic_write import atomic_write_at, text_bytes
+from kiro_crew.config import loosening_provenance
 from kiro_crew.identity_stores import StoreMapping, store_mappings
 from kiro_crew.platform_compat import is_link_or_junction, open_file_no_reparse, pin_directory
 from kiro_crew.pod import launchd, runtime
 from kiro_crew.pod import windows as win_backend
 from kiro_crew.pod.config import PodConfig
 from kiro_crew.pod.runtime import PodError
+from kiro_crew.pod.seed_config import _SEED_CONFIG_LIMIT, _seed_config_text
 from kiro_crew.seed import SeedError
 
 #: Times a pod-home ``mkdir``-then-``open`` pair is re-run when the directory THIS
@@ -90,33 +91,38 @@ def _open_seed_regular_file(home_fd: int, name: str) -> int:
 
 def _prepare_seeded_home_fd(home_fd: int) -> None:
     """Finish pod-owned setup without reopening the seeded home by name."""
+    raw: bytes | None
     try:
         fd = _open_seed_regular_file(home_fd, "config.json")
     except FileNotFoundError:
-        data: dict = {}
+        raw = None
     except OSError as exc:
         raise PodError(f"could not open seeded config.json: {exc}") from exc
     else:
         try:
-            with os.fdopen(fd, "r", encoding="utf-8", errors="strict") as handle:
+            with os.fdopen(fd, "rb") as handle:
                 fd = -1
-                text = handle.read(1024 * 1024 + 1)
-        except (OSError, UnicodeError) as exc:
+                raw = handle.read(_SEED_CONFIG_LIMIT + 1)
+        except OSError as exc:
             raise PodError(f"could not read seeded config.json: {exc}") from exc
         finally:
             if fd >= 0:
                 os.close(fd)
-        if len(text) > 1024 * 1024:
-            raise PodError("seeded config.json exceeds the 1 MiB pod setup limit")
-        try:
-            data = json.loads(user_json.strip_utf8_bom(text))
-        except ValueError as exc:
-            raise PodError(f"seeded config.json is not valid JSON: {exc}") from exc
-        if not isinstance(data, dict):
-            raise PodError("seeded config.json must contain a JSON object")
 
-    runtime._apply_seed_config_floor(data)
-    atomic_write_at(home_fd, "config.json", json.dumps(data, indent=2), fsync=True, mode=0o600)
+    # Kiro Crew's own write of the pod's keystone config, so it is endorsed in the POD's
+    # data home, where the pod gateway reads the copy: a restart of a seeded pod then
+    # takes effect instead of loading as a change made outside Kiro Crew. The copy is
+    # these exact bytes; the publish stays descriptor-pinned. A home whose real path
+    # cannot be read is refused rather than written unendorsed.
+    home_path = pinned_fs.fd_real_path(home_fd)
+    if home_path is None:
+        raise PodError("could not resolve the pod home to record its config")
+    text, publish = _seed_config_text(raw, Path(home_path))
+    with loosening_provenance.endorsing(
+        loosening_provenance.LEAF_CONFIG, text_bytes(text), home=Path(home_path)
+    ):
+        if publish:
+            atomic_write_at(home_fd, "config.json", text, fsync=True, mode=0o600)
 
     # Creating ``workspace`` and opening it are two syscalls, and a removal landing
     # between them is an interleaving no ordering closes; tolerating only the
@@ -405,24 +411,19 @@ def _prepare_seeded_home_dir(home_dir: Path) -> None:
     config = home_dir / "config.json"
     if pinned_fs.is_reparse_point(config):
         raise PodError(f"seeded config.json is a link; refusing to read it: {config}")
-    data: dict = {}
+    raw: bytes | None = None
     if config.is_file():
         try:
-            text = config.read_text(encoding="utf-8", errors="strict")
-        except (OSError, UnicodeError) as exc:
+            raw = config.read_bytes()
+        except OSError as exc:
             raise PodError(f"could not read seeded config.json: {exc}") from exc
-        if len(text) > 1024 * 1024:
-            raise PodError("seeded config.json exceeds the 1 MiB pod setup limit")
-        try:
-            loaded = json.loads(user_json.strip_utf8_bom(text))
-        except ValueError as exc:
-            raise PodError(f"seeded config.json is not valid JSON: {exc}") from exc
-        if not isinstance(loaded, dict):
-            raise PodError("seeded config.json must contain a JSON object")
-        data = loaded
 
-    runtime._apply_seed_config_floor(data)
-    runtime.atomic_write(config, json.dumps(data, indent=2), fsync=True, mode=0o600)
+    text, publish = _seed_config_text(raw, home_dir)
+    payload = text_bytes(text)
+    # Endorsed in the pod's own data home, as in _prepare_seeded_home_fd.
+    with loosening_provenance.endorsing(loosening_provenance.LEAF_CONFIG, payload, home=home_dir):
+        if publish:
+            runtime.atomic_write(config, payload, fsync=True, mode=0o600)
 
     workspace = home_dir / "workspace"
     if pinned_fs.is_reparse_point(workspace):

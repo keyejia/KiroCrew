@@ -7,18 +7,21 @@ import base64
 import errno
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kiro_crew import beacon
-from kiro_crew.config import KiroCrewConfig
+from kiro_crew.config import KiroCrewConfig, loosening_provenance
 from kiro_crew.config.loader import (
     ConfigReadError,
     ConfigWriteRefused,
     config_local_path,
     config_path,
     read_config_text,
+    read_endorsed_config_text,
     update_config_locked,
     workspace_dir_from_entry,
 )
@@ -44,6 +47,7 @@ from kiro_crew.config.superseded_defaults import (
 from kiro_crew.config.write_provenance import record_path
 from kiro_crew.hooks import safe_read_file
 from kiro_crew.sel import sel
+from kiro_crew.user_json import loads_user_json
 
 if TYPE_CHECKING:
     from kiro_crew.config.schema import ConfigEntry
@@ -468,26 +472,113 @@ def _run_config_cmd(args: argparse.Namespace) -> None:
                 print(f"✅ {key} = {json.dumps(parsed)}")
                 _warn_if_bot_name_altered(key, parsed)
     elif action == "edit":
-
-        p = config_path()
-        if not p.exists():
-            cfg = KiroCrewConfig()
-            cfg.save()
-            print(f"👻 Created default config: {p}")
-        sel().log_api_access(
-            caller="cli",
-            operation="config_edit",
-            outcome="allowed",
-            source="cli",
-            resources=str(p),
-        )
-        editor = os.environ.get("EDITOR", "vi")
-        os.execvp(editor, [editor, str(p)])
+        _config_edit()
     elif action == "defaults":
         _defaults_cmd(args)
     else:
         print("Usage: kirocrew config {get,set,edit,defaults}", file=sys.stderr)
         sys.exit(1)
+
+
+def _config_edit() -> None:
+    """Open ``config.json`` in ``$EDITOR`` and save the result through the config writer.
+
+    The editor works on a private copy, never on ``config.json`` itself: a file an
+    editor rewrites in place is an edit Kiro Crew did not make, so where the sandbox
+    seals the keystone files it would load as a pending change instead of taking
+    effect. The copy is saved with :func:`update_config_locked`, which endorses what it
+    publishes, so the edit applies at once. Nothing is saved when the editor exits
+    non-zero or the text is unchanged; an edit that cannot be saved (not a JSON object,
+    refused by the publish floor, or ``config.json`` changed meanwhile) is left in the
+    copy and its path printed.
+    """
+    p = config_path()
+    # First: a config.json removed outside Kiro Crew is pending too, and creating the
+    # default below would be a save of it.
+    if loosening_provenance.leaf_pending(loosening_provenance.LEAF_CONFIG):
+        print(
+            "❌ config.json has a change waiting for review in Settings > Security. "
+            "Apply or discard it there first, then run `kirocrew config edit` again.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if not p.exists():
+        cfg = KiroCrewConfig()
+        cfg.save()
+        print(f"👻 Created default config: {p}")
+    try:
+        original = read_endorsed_config_text(p)
+    except FileNotFoundError:
+        original = ""
+    try:
+        expected = loads_user_json(original)
+    except ValueError:
+        expected = None
+    if not isinstance(expected, dict):
+        # Not a config object: the writer reads it as {} (on_corrupt="reset"), so a
+        # broken config.json can still be repaired here.
+        expected = None
+    sel().log_api_access(
+        caller="cli",
+        operation="config_edit",
+        outcome="allowed",
+        source="cli",
+        resources=str(p),
+    )
+    fd, name = tempfile.mkstemp(prefix="config-edit-", suffix=".json", dir=p.parent)
+    copy = Path(name)
+    keep = False
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(original)
+        editor = os.environ.get("EDITOR", "vi")
+        code = subprocess.call(
+            # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-tainted-env-args.dangerous-subprocess-use-tainted-env-args -- no shell; the argv is the operator's own $EDITOR plus one private temp path, as the os.execvp it replaces was
+            [editor, str(copy)]
+        )
+        if code != 0:
+            print(
+                f"❌ {editor} exited with status {code}; config.json was not changed.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        edited = copy.read_text(encoding="utf-8")
+        if edited == original:
+            print("No changes made.")
+            return
+        keep = True
+        try:
+            data = loads_user_json(edited)
+        except ValueError as e:
+            print(f"❌ Not saved, the edit is not valid JSON: {e}", file=sys.stderr)
+            print(f"   Your edit is kept in {copy}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(data, dict):
+            print("❌ Not saved, the edit is not a JSON object.", file=sys.stderr)
+            print(f"   Your edit is kept in {copy}", file=sys.stderr)
+            sys.exit(1)
+
+        def _replace(current: dict) -> dict:
+            if current != (expected if expected is not None else {}):
+                raise ConfigWriteRefused(
+                    "config.json changed while it was open in the editor, so the edit "
+                    "was not saved over that change"
+                )
+            return data
+
+        try:
+            update_config_locked(
+                p, mutate=_replace, on_corrupt="reset" if expected is None else "fail"
+            )
+        except (ConfigReadError, ConfigWriteRefused) as e:
+            print(f"❌ Not saved: {e}", file=sys.stderr)
+            print(f"   Your edit is kept in {copy}", file=sys.stderr)
+            sys.exit(1)
+        keep = False
+        print(f"✅ Saved {p}")
+    finally:
+        if not keep:
+            copy.unlink(missing_ok=True)
 
 
 def _defaults_cmd(args: argparse.Namespace) -> None:
@@ -640,6 +731,9 @@ def _defaults_cmd(args: argparse.Namespace) -> None:
         except ConfigReadError as e:
             print(f"❌ Cannot edit a corrupt config.json: {e}", file=sys.stderr)
             sys.exit(1)
+        except ConfigWriteRefused as e:
+            print(f"❌ {e}", file=sys.stderr)
+            sys.exit(1)
         except OSError as e:
             # A read-only or full data home, or a refused link: report it and stop,
             # rather than letting the CLI die on a traceback.
@@ -696,6 +790,9 @@ def _defaults_cmd(args: argparse.Namespace) -> None:
             recorded = record_acks(keys)
         except ConfigReadError as e:
             print(f"❌ Cannot read a corrupt config.json: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ConfigWriteRefused as e:
+            print(f"❌ {e}", file=sys.stderr)
             sys.exit(1)
         except OSError as e:
             print(f"❌ Could not record acknowledgments: {e}", file=sys.stderr)
