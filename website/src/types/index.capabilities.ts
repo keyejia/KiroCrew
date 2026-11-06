@@ -21,6 +21,11 @@ export interface Lesson {
   /** Where the lesson came from (`user_explicit`, `consolidation`, ...), as the
    *  store recorded it. Absent or empty when the row carries no source. */
   source?: string
+  /** The authored startup tier (`always` / `on_topic`); absent when unstated. */
+  applies?: string
+  /** A JSONL row's NOT-clause, which its `rule` does not show. `null` when the
+   *  stored clause could not be sent unredacted, so an edit cannot keep it. */
+  negative?: string | null
 }
 
 /** One row of `GET /api/memory/stores` — a declared memory store.

@@ -730,6 +730,113 @@ describe('MemoryTab — lessons', () => {
   })
 })
 
+describe('MemoryTab — lesson search and edit (#17982)', () => {
+  const ROW = {
+    rule: 'zzq-old-rule', category: 'tool', ts: '2026-01-03T00:00:00Z', repo_scope: 'src/pkg',
+    scope: 'workspace', workspace: 'ws-1', applies: 'on_topic', negative: 'zzq-not-clause',
+  }
+  const rowOf = (text: string) => screen.getByText(text).closest('tr') as HTMLElement
+  const startEdit = async (text: string, next = 'zzq-new-rule') => {
+    await userEvent.click(within(rowOf(text)).getByRole('button', { name: /^Edit$/ }))
+    const input = screen.getByRole('textbox', { name: /^Edit rule$/ }) as HTMLInputElement
+    fireEvent.change(input, { target: { value: next } })
+    await userEvent.click(within(input.closest('tr') as HTMLElement).getByRole('button', { name: /^Save$/ }))
+    return input
+  }
+
+  it('narrows the rows to rules matching the search, and says so when none match', async () => {
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-rule-beta')
+    const search = screen.getByRole('textbox', { name: /^Search lessons$/ })
+    await userEvent.type(search, 'ALPHA')
+    expect(lessonRows().map((tr) => tr.querySelector('td:first-child')?.textContent)).toEqual(['zzq-rule-alpha'])
+    await userEvent.type(search, '-none')
+    expect(screen.getByTestId('filtered-empty')).toHaveTextContent('ALPHA-none')
+  })
+
+  it('saves the edited rule with the row\'s own scope, tier and clause, then deletes the old row', async () => {
+    api.lessons.mockResolvedValue({ lessons: [ROW] })
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-old-rule')
+    await startEdit('zzq-old-rule')
+
+    await waitFor(() => expect(api.deleteLesson).toHaveBeenCalledWith('zzq-old-rule', 'src/pkg', { scope: 'workspace', workspace: 'ws-1', exact: true }))
+    expect(api.createLesson).toHaveBeenCalledWith('zzq-new-rule', 'tool', {
+      scope: 'workspace', workspace: 'ws-1', repo_scope: 'src/pkg', applies: 'on_topic', negative: 'zzq-not-clause',
+    })
+    expect(api.createLesson.mock.invocationCallOrder[0]).toBeLessThan(api.deleteLesson.mock.invocationCallOrder[0])
+    expect(screen.queryByRole('textbox', { name: /^Edit rule$/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps the original row and the draft when the store refuses the edited rule', async () => {
+    api.createLesson.mockResolvedValue({ ok: false, outcome: 'refused', reason: 'zzq-refusal' })
+    api.lessons.mockResolvedValue({ lessons: [ROW] })
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-old-rule')
+    const input = await startEdit('zzq-old-rule')
+
+    expect(await screen.findByText(/Could not save the edit/)).toBeInTheDocument()
+    expect(screen.getByText(/zzq-refusal/)).toBeInTheDocument()
+    expect(input.value).toBe('zzq-new-rule')
+    expect(api.deleteLesson).not.toHaveBeenCalled()
+  })
+
+  it('deletes the old row after an enriching add, but never after a case-only change', async () => {
+    api.createLesson.mockResolvedValue({ ok: true, outcome: 'enriched', reason: '' })
+    api.lessons.mockResolvedValue({ lessons: [ROW] })
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-old-rule')
+    await startEdit('zzq-old-rule', 'ZZQ-OLD-RULE')
+    expect(await screen.findByText(/already stored/)).toBeInTheDocument()
+    expect(api.deleteLesson).not.toHaveBeenCalled()
+
+    const input = screen.getByRole('textbox', { name: /^Edit rule$/ })
+    fireEvent.change(input, { target: { value: 'zzq-new-rule' } })
+    await userEvent.click(within(input.closest('tr') as HTMLElement).getByRole('button', { name: /^Save$/ }))
+    await waitFor(() => expect(api.deleteLesson).toHaveBeenCalledWith('zzq-old-rule', 'src/pkg', { scope: 'workspace', workspace: 'ws-1', exact: true }))
+  })
+
+  it('re-reads the list when the old row\'s delete fails, so the stored edit shows', async () => {
+    api.deleteLesson.mockRejectedValueOnce(new Error('zzq-delete-refused'))
+    api.lessons.mockResolvedValue({ lessons: [ROW] })
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-old-rule')
+    const reads = api.lessons.mock.calls.length
+    await startEdit('zzq-old-rule')
+
+    expect(await screen.findByText('zzq-delete-refused')).toBeInTheDocument()
+    await waitFor(() => expect(api.lessons.mock.calls.length).toBeGreaterThan(reads))
+  })
+
+  it('offers no Edit on a row whose scope or NOT-clause cannot be sent back', async () => {
+    api.lessons.mockResolvedValue({
+      lessons: [
+        { ...ROW, rule: 'zzq-null-scope', repo_scope: null },
+        { ...ROW, rule: 'zzq-null-clause', negative: null },
+      ],
+    })
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-null-scope')
+    for (const rule of ['zzq-null-scope', 'zzq-null-clause']) {
+      expect(within(rowOf(rule)).queryByRole('button', { name: /^Edit$/ })).not.toBeInTheDocument()
+      expect(within(rowOf(rule)).getByRole('button', { name: /^Delete/ })).toBeInTheDocument()
+    }
+  })
+
+  it('only re-reads the list when the add already replaced the old preference', async () => {
+    api.createLesson.mockResolvedValue({ ok: true, outcome: 'inserted', reason: '', superseded: ['zzq-old-rule'] })
+    api.lessons.mockResolvedValue({ lessons: [ROW] })
+    renderWithProviders(<MemoryTab refreshTrigger={0} />)
+    await screen.findByText('zzq-old-rule')
+    const reads = api.lessons.mock.calls.length
+    await startEdit('zzq-old-rule')
+
+    await waitFor(() => expect(api.lessons.mock.calls.length).toBeGreaterThan(reads))
+    expect(api.deleteLesson).not.toHaveBeenCalled()
+    expect(screen.queryByText(/No stored lesson matched this row/)).not.toBeInTheDocument()
+  })
+})
+
 describe('MemoryTab — manual consolidation', () => {
   it('consolidates every known session and reports the count', async () => {
     renderWithProviders(<MemoryTab refreshTrigger={0} />)

@@ -1026,6 +1026,14 @@ async def api_lessons(request: web.Request) -> web.Response:
             result["scope"] = tier[0]
             if tier[1] is not None:
                 result["workspace"] = tier[1]
+            # A JSONL row keeps its NOT-clause out of ``rule`` (a vector row's
+            # display text already carries it), so the row names it for the
+            # Memory tab's edit to send back. Like ``repo_scope`` it must
+            # round-trip byte-exact, so a clause redaction would alter is
+            # ``None``: never sent raw, and never written back redacted.
+            if isinstance(negative, str) and negative.strip():
+                safe_negative = _redact_memory_field(negative)
+                result["negative"] = safe_negative if safe_negative == negative else None
         # Only an AUTHORED tier is reported. A row nobody tiered is served as a
         # standing rule, so emitting a value for it would name a distinction the
         # injection path does not make, and the key's absence is what says "this

@@ -148,6 +148,30 @@ async def test_jsonl_rows_carry_the_same_selector_contract(tmp_path) -> None:
     assert set(remaining) == {"", None}, remaining
 
 
+async def test_jsonl_rows_name_their_not_clause_so_an_edit_can_keep_it(tmp_path) -> None:
+    lines = [
+        {"ts": "t0", "rule": f"{RULE} with a clause", "category": "tool", "negative": "skip it"},
+        {"ts": "t1", "rule": f"{RULE} plain", "category": "tool"},
+        {
+            "ts": "t2",
+            "rule": f"{RULE} with a secret clause",
+            "category": "tool",
+            "negative": "not with ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij1234",
+        },
+    ]
+    (tmp_path / "lessons.jsonl").write_text(
+        "".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8"
+    )
+    state = MagicMock()
+    state.lessons = LessonStore(base_dir=tmp_path)
+
+    rows = {row["rule"]: row for row in await _list(None, state)}
+    assert rows[f"{RULE} with a clause"]["negative"] == "skip it"
+    assert "negative" not in rows[f"{RULE} plain"]
+    # A clause the redaction chain would alter cannot round-trip: it reads None.
+    assert rows[f"{RULE} with a secret clause"]["negative"] is None
+
+
 # The two other list surfaces read the same identity and feed the same
 # scope-selective remove, so they render the scope under the same contract.
 

@@ -201,11 +201,19 @@ export function createMemoryEndpoints({ get, post, put, del, j, jfetch: fetch }:
   const lessons = {
     // Lessons
     lessons: () => fetch('/api/lessons').then(j),
-    createLesson: (rule: string, category: string) =>
-      post('/api/lessons', { rule, category }).then(j) as Promise<{
+    // `row` is set by an edit: the rewritten rule goes back with the edited
+    // row's own file, scope, tier and NOT-clause, so only its text changes.
+    createLesson: (
+      rule: string,
+      category: string,
+      row?: { scope?: 'global' | 'workspace'; workspace?: string; repo_scope?: string; applies?: string; negative?: string },
+    ) =>
+      post('/api/lessons', { rule, category, ...row }).then(j) as Promise<{
         ok: boolean
         outcome: 'inserted' | 'enriched' | 'unchanged' | 'deduped' | 'refused'
         reason: string
+        // The rules this write replaced (a conflicting preference), redacted.
+        superseded?: string[]
         // Present only on `deduped`: the stored lesson the write lost to.
         winner?: string
         winner_repo_scope?: string | null
