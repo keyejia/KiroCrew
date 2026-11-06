@@ -1,15 +1,26 @@
-"""Listings behind the directory pickers ``/api/browse-dirs`` and ``/api/browse-files``."""
+"""Listings behind the directory pickers ``/api/browse-dirs`` and ``/api/browse-files``,
+and the project picker's folder create, ``POST /api/browse-dirs/create``."""
 
 from __future__ import annotations
 
+import errno
 import os
 from typing import TYPE_CHECKING
+
+from aiohttp import web
 
 if TYPE_CHECKING:
     from kiro_crew.dashboard.handlers.files import (
         _WIN_DRIVE_ROOT_RE,
+        _PathProbeBusy,
+        _probe_busy_response,
+        _run_path_probe,
+        _sel,
         is_sensitive_canonical_path,
+        logger,
         platform_compat,
+        read_bounded_json,
+        require_owner_dashboard_request,
     )
 
 
@@ -138,3 +149,95 @@ def _browse_parent(base: str) -> str:
     if _is_windows_drive_root(base):
         return ""
     return os.path.dirname(base)
+
+
+def _create_browse_dir_sync(parent: str, name: str) -> tuple[str, str]:
+    """Make folder *name* inside directory *parent*: ``(outcome, path)``.
+
+    Blocking (``realpath`` then ``mkdir``); the route runs it on the probe pool.
+    The target is spelled the way the OS will create it (``abspath``: on Windows
+    ``C:x`` leaves *parent* and a trailing dot is dropped) and must sit directly
+    in *parent*. It then meets the sensitive-path floor before anything is
+    created, so the picker cannot make a protected folder (``~/.aws`` in a home
+    without one); a path inside a protected one is protected too, so this also
+    refuses a protected *parent*. Outcomes: ``created``, ``sensitive``,
+    ``exists``, ``not_found`` (the parent is gone or is not a directory),
+    ``permission_denied``, ``invalid_name`` and ``failed``.
+    """
+    base = os.path.realpath(os.path.expanduser(parent))
+    target = os.path.abspath(os.path.join(base, name))
+    if os.path.normcase(os.path.dirname(target)) != os.path.normcase(base):
+        return "invalid_name", target
+    if is_sensitive_canonical_path(target):
+        return "sensitive", target
+    try:
+        os.mkdir(target)
+    except FileExistsError:
+        return "exists", target
+    except (FileNotFoundError, NotADirectoryError):
+        return "not_found", target
+    except PermissionError:
+        return "permission_denied", target
+    except ValueError:  # a NUL or an unencodable character in the name
+        return "invalid_name", target
+    except OSError as exc:
+        if exc.errno == errno.EROFS:
+            return "permission_denied", target
+        if exc.errno in (errno.ENAMETOOLONG, errno.EINVAL):
+            return "invalid_name", target
+        logger.warning("browse_create_dir failed for %s: errno %s", target, exc.errno)
+        return "failed", target
+    return "created", target
+
+
+async def api_browse_create_dir(request: web.Request) -> web.Response:
+    """POST /api/browse-dirs/create -- make one folder in the directory the picker shows.
+
+    Body ``{"parent": <directory>, "name": <folder name>}``; answers 201
+    ``{"path"}`` with the new folder's path so the picker can list it. Owner-only,
+    checked before the body is read, like ``/api/file-write``: it writes to the
+    gateway host's filesystem. *name* is one path component, so the route makes
+    exactly one folder level. Every refusal carries a ``code`` for the picker.
+    """
+    owner_denied = await require_owner_dashboard_request(request, "browse_create_dir")
+    if owner_denied is not None:
+        return owner_denied
+    caller = request.get("user", "dashboard")
+    body, body_err = await read_bounded_json(request)
+    if body_err is not None:
+        return body_err
+    assert body is not None  # read_bounded_json returns (dict, None) on success
+    parent, name = body.get("parent"), body.get("name")
+    if not isinstance(parent, str) or not parent.strip():
+        return web.json_response(
+            {"error": "A parent directory is required", "code": "parent_required"}, status=400
+        )
+    if not isinstance(name, str) or name in ("", ".", "..") or "/" in name or "\\" in name:
+        return web.json_response(
+            {"error": "Not a valid folder name", "code": "invalid_name"}, status=400
+        )
+    try:
+        outcome, target = await _run_path_probe(_create_browse_dir_sync, parent.strip(), name)
+    except _PathProbeBusy:
+        return _probe_busy_response(resource=parent, operation="browse_create_dir", caller=caller)
+    if outcome == "created":
+        _sel().log_api_access(
+            caller=caller, operation="browse_create_dir", outcome="allowed", resources=target
+        )
+        return web.json_response({"path": target}, status=201)
+    status, code, message = {
+        "sensitive": (403, "access_denied", "Access denied"),
+        "exists": (409, "already_exists", "A file or folder with that name already exists"),
+        "not_found": (404, "not_found", "The parent directory no longer exists"),
+        "permission_denied": (403, "permission_denied", "No permission to create a folder here"),
+        "invalid_name": (400, "invalid_name", "Not a valid folder name"),
+        "failed": (500, "create_failed", "Could not create the folder"),
+    }[outcome]
+    _sel().log_api_access(
+        caller=caller,
+        operation="browse_create_dir",
+        outcome="denied" if status < 500 else "failure",
+        resources=target,
+        error=code,
+    )
+    return web.json_response({"error": message, "code": code}, status=status)
