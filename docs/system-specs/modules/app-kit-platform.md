@@ -888,6 +888,19 @@ prewarm clones rows that have an installed copy ahead of every other row, and th
 registry-refresh sweep expires the installed copy with the others, so a Sync
 shows after the next refresh.
 
+An index-tier registry has no prewarm, so `refresh_registries` reads those tips
+itself. After the expiry above, `installed_app_tips.refresh_installed_tips` takes
+each row of an index-tier registry's fresh index that carries no publishable
+version and names an app installed from that row (same name, `registry:` source,
+same `sourceRegistry` and the same repository as the row's clone URL). It reads
+the row's `app.json` with `_fetch_app_manifest`'s throwaway clone, which is
+anonymous, strict-sandboxed and limited to trusted hosts. No app name is passed,
+so the installed checkout is skipped. A manifest naming the row's app is written
+as the source manifest cache. The batch reads at most `MAX_ROWS` rows per
+registry, `CONCURRENCY` at a time, within `BATCH_BUDGET_SECS`. A read still
+running at the deadline is cancelled and its row keeps its old cache. Only the
+explicit refresh does this; the listing's own index fetch does not.
+
 The client
 (`isVerified`/`sourceLabel` in `website/src/components/appstore/types.ts`)
 reads the server fields, still rejects a `_registry`-tagged row first (so
