@@ -385,13 +385,17 @@ Two things are worth knowing before you start something large.
 disagreement gets resolved, and [MAINTAINERS.md](MAINTAINERS.md) lists the
 people doing it.
 
-Architectural changes get written up as an RFC first, in
-[docs/request-for-change/](docs/request-for-change/), so the design can be
-argued over before anyone writes the code. That applies to changes to a public
-interface, changes other parts of the project would have to build around, and
-anything that would be expensive to reverse. Everything else skips it, and a bug
-fix should never wait on a design document. If you are unsure which side of the
-line your change falls on, open an issue and ask.
+Large changes get written up as an RFC first, in
+[docs/request-for-change/](docs/request-for-change/), as their own pull request,
+so the design can be argued over before anyone writes the code. A change is
+large when it alters a contract other code or people depend on (a public
+interface, something other parts of the project build around), moves a
+security, data or trust boundary, or makes a product-shape decision that needs
+a maintainer's sign-off (a changed default, a removed or replaced user-facing
+capability). Everything else is one pull request: if the change makes an RFC or
+other design doc stale, update that doc in the same diff. A bug fix should
+never wait on a design document. If you are unsure which side of the line your
+change falls on, open an issue and ask.
 
 ### CI checks on your PR
 
