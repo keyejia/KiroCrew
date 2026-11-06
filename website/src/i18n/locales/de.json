@@ -9447,6 +9447,10 @@
       "no_matches_for": "Keine Treffer für",
       "no_noun_match": "Keine passenden {{noun}}"
     },
+    "ultracodeToggle": {
+      "hint": "Dynamische Workflows bei jeder Aufgabe, mit jedem Aufwand",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "Kopiert",
       "copy_command": "Befehl kopieren",

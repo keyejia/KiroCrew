@@ -9226,6 +9226,10 @@
       "no_matches_for": "没有匹配",
       "no_noun_match": "没有匹配的{{noun}}"
     },
+    "ultracodeToggle": {
+      "hint": "在任意推理强度下，每个任务都使用动态工作流",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "已复制",
       "copy_command": "复制命令",

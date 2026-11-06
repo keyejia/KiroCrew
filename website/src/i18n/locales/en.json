@@ -5911,6 +5911,10 @@
       "no_matches_for": "No matches for",
       "no_noun_match": "No {{noun}} match"
     },
+    "ultracodeToggle": {
+      "hint": "Dynamic workflows on every task, at any effort level",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "Copied",
       "copy_command": "Copy command",

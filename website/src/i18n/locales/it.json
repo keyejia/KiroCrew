@@ -9668,6 +9668,10 @@
       "no_matches_for": "Nessuna corrispondenza per",
       "no_noun_match": "Nessun(a) {{noun}} corrispondente"
     },
+    "ultracodeToggle": {
+      "hint": "Flussi di lavoro dinamici su ogni attività, con qualsiasi livello di impegno",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "Copiato",
       "copy_command": "Copia comando",

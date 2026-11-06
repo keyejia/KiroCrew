@@ -9889,6 +9889,10 @@
       "no_matches_for": "Нет совпадений для",
       "no_noun_match": "Нет совпадающих {{noun}}"
     },
+    "ultracodeToggle": {
+      "hint": "Динамические рабочие процессы в каждой задаче при любой глубине",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "Скопировано",
       "copy_command": "Скопировать команду",

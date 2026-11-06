@@ -9447,6 +9447,10 @@
       "no_matches_for": "কোনো মিল নেই",
       "no_noun_match": "কোনো {{noun}} মিলছে না"
     },
+    "ultracodeToggle": {
+      "hint": "প্রতিটি কাজে ডায়নামিক ওয়ার্কফ্লো, যেকোনো প্রচেষ্টা স্তরে",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "কপি হয়েছে",
       "copy_command": "কমান্ড কপি করুন",

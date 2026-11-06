@@ -276,6 +276,18 @@ ACP_BACKENDS_EFFORT_FROM_ADVERTISED_OPTION = frozenset(
 # (``AcpProvider.supports_effort``); every concrete id keeps the registry answer.
 ACP_BACKENDS_DEFAULT_PSEUDO_MODEL = frozenset({ACP_BACKEND_CLAUDE})
 
+# Backends whose session offers the ``ultracode`` switch (dynamic workflows on every
+# task) to the dashboard. claude-agent-acp advertises it in ``configOptions`` from
+# 0.97.0, only on a model that supports it, as an ``on``/``off`` select (a boolean
+# only for a client that opted into boolean options, which Crew does not). It changes
+# how Claude Code plans work, not which tools run or how they are approved, which is
+# what puts it on the per-harness allowlist of options a user may write.
+# Opt-in (harness-parity H6): another harness's option of the same id stays unread.
+ACP_BACKENDS_ULTRACODE_CONFIG_OPTION = frozenset({ACP_BACKEND_CLAUDE})
+
+#: The ``configId`` of that switch.
+ULTRACODE_CONFIG_OPTION_ID = "ultracode"
+
 
 def effort_config_option_id(backend: str) -> str:
     """The ``configId`` *backend* exposes its reasoning effort under.

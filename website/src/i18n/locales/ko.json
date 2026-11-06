@@ -9226,6 +9226,10 @@
       "no_matches_for": "일치하는 항목 없음:",
       "no_noun_match": "일치하는 {{noun}} 없음"
     },
+    "ultracodeToggle": {
+      "hint": "어떤 강도에서든 모든 작업에 동적 워크플로 사용",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "복사됨",
       "copy_command": "명령 복사",

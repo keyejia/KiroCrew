@@ -9447,6 +9447,10 @@
       "no_matches_for": "कोई मिलान नहीं",
       "no_noun_match": "कोई {{noun}} मेल नहीं"
     },
+    "ultracodeToggle": {
+      "hint": "हर टास्क पर डायनेमिक वर्कफ़्लो, किसी भी प्रयास स्तर पर",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "कॉपी हो गया",
       "copy_command": "कमांड कॉपी करें",

@@ -9668,6 +9668,10 @@
       "no_matches_for": "Sin coincidencias para",
       "no_noun_match": "No hay {{noun}} que coincidan"
     },
+    "ultracodeToggle": {
+      "hint": "Flujos de trabajo dinámicos en cada tarea, con cualquier nivel de esfuerzo",
+      "label": "Ultracode"
+    },
     "updateFoundModal": {
       "copied": "Copiado",
       "copy_command": "Copiar comando",
