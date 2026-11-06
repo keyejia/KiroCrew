@@ -9682,6 +9682,8 @@
         "crew_mode_desc": "Lets a chat hand tasks to a crew and track them on a Board.",
         "explore": "Explore",
         "explore_desc": "Adds Explore to the top bar: features to try, your progress, and a Try today card on a new chat.",
+        "marketplace_apps": "Install apps from Discover",
+        "marketplace_apps_desc": "Lets Discover install an app listing. You see what the app contains first, and it is installed turned off only after you confirm.",
         "remote_dispatch": "Remote dispatch",
         "remote_dispatch_desc": "Lets Ultra Mode chats run tasks on machines you've connected under Remote Crew. Nothing is sent until a machine is connected.",
         "remote_dispatch_save_failed": "Could not save remote dispatch. Try again.",
