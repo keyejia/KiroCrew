@@ -406,6 +406,11 @@ async def aclose(self: SessionMap) -> None:
                 return
 
 
+def writes_refused(self: SessionMap) -> bool:
+    """Whether :func:`_load` could not read the file, so every write raises until a restart."""
+    return self._load_failed
+
+
 @_guarded
 def _write(self: SessionMap) -> None:
     payload, seq = self._serialize()

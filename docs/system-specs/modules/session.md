@@ -3128,7 +3128,10 @@ byte-order mark reads normally. A file that is not a JSON object starts the map
 empty, and the first write moves it to `session_map.json.corrupt-<utc>` before
 landing; a failed move fails that write and the state stays owed. A file whose
 read raises `OSError` is left alone, and every write raises until a restart reads
-it (`session_map_store._load`, `_write_payload`).
+it (`session_map_store._load`, `_write_payload`). `/api/status` reports that state
+as `session_map_writes_refused: true` (from `SessionMap.writes_refused()`) with the
+remedy in `session_map_remedy`, which `kirocrew status` prints as a `Session map:`
+line; otherwise they read `false` and `""`.
 
 **Module layout:** `kiro_crew.session_map` is the import path and defines `SessionMap`
 itself: the constructor, the resume rule and both stale paths (`get`, `prune`, the per-read
@@ -3139,7 +3142,7 @@ binds its other members by name from two owner modules:
 
 | Owner | Owns |
 |---|---|
-| `session_map_store.py` | `_MAP_LOCK` and `_guarded`, the load, the deferred flush's scheduling and snapshot claims, and the atomic write (`batched_save`, `_save`, `flush`, `aflush`, `aclose`, `_write_payload`); the debounced task itself, `_flush_async`, stays in the facade, where tests patch its debounce |
+| `session_map_store.py` | `_MAP_LOCK` and `_guarded`, the load and the refuse-writes state it can leave (`writes_refused`), the deferred flush's scheduling and snapshot claims, and the atomic write (`batched_save`, `_save`, `flush`, `aflush`, `aclose`, `_write_payload`); the debounced task itself, `_flush_async`, stays in the facade, where tests patch its debounce |
 | `session_map_links.py` | the Slack thread link and its reverse index, the channel-neutral mirror binding, the session's own link, the compare-and-clear unlinks, the mutes, the binding nonces and `ConversationOwnershipConflict` |
 
 New work goes to the module that owns its responsibility. A bound member reads as a method of

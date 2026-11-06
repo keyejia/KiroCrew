@@ -256,6 +256,7 @@ async def api_status(request: web.Request) -> web.Response:
     # Off-loop for the same reason: the RSS read is procfs I/O on Linux and the
     # ceiling is a config read.
     gateway_rss_mb, watchdog_rss_max_mb = await asyncio.to_thread(_gateway_memory_fields)
+    map_writes_refused = bool(state.sessions._session_map.writes_refused())
     data.update(
         {
             "uptime_secs": int(uptime),
@@ -272,6 +273,15 @@ async def api_status(request: web.Request) -> web.Response:
             # operator opening the System page.
             "gateway_rss_mb": gateway_rss_mb,
             "watchdog_rss_max_mb": watchdog_rss_max_mb,
+            # Why session-map writes fail after an unreadable startup read, and the fix.
+            "session_map_writes_refused": map_writes_refused,
+            "session_map_remedy": (
+                "session_map.json could not be read at startup, so its chat and channel"
+                " bindings are not loaded and no change to the map is saved; restart the"
+                " gateway once the file is readable"
+                if map_writes_refused
+                else ""
+            ),
             **yolo_grant_fields(),
             # The configured ad-hoc duration, and whether policy allows the
             # no-timed-expiry option — the Settings card lock-badges it when not.

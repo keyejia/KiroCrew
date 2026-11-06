@@ -17,10 +17,17 @@ from __future__ import annotations
 import asyncio
 import json
 import pathlib
+import time
+from unittest.mock import MagicMock
 
 import pytest
+from aiohttp import web
+from aiohttp.test_utils import make_mocked_request
 
 from kiro_crew import session_map_store
+from kiro_crew.dashboard import status_counts
+from kiro_crew.dashboard.handlers_system import api_status
+from kiro_crew.dashboard.state import DashboardState
 from kiro_crew.session_map import SessionMap
 
 _SEED = {
@@ -167,3 +174,40 @@ def test_a_failed_move_aside_refuses_the_write_until_one_succeeds(map_dir, monke
         assert handle.read() == b"{not json"
     on_disk = json.loads((map_dir / "session_map.json").read_text(encoding="utf-8"))
     assert list(on_disk) == ["dashboard:carol"]
+
+
+async def _api_status_body(monkeypatch, map_dir: pathlib.Path, session_map: SessionMap) -> dict:
+    """``GET /api/status`` from a real ``DashboardState`` whose session manager holds *session_map*."""
+    monkeypatch.setattr("kiro_crew.dashboard.state.config_dir", lambda: map_dir)
+    # A warm count cache, so the status path touches no cron or lesson store.
+    monkeypatch.setattr(status_counts, "_counts_cache", (0, 0))
+    monkeypatch.setattr(status_counts, "_counts_cache_ts", time.monotonic())
+    monkeypatch.setattr(status_counts, "_counts_refresh_inflight", False)
+    crons = MagicMock()
+    crons.status.return_value = {}
+    state = DashboardState(
+        sessions=MagicMock(count=0, _session_map=session_map),
+        crons=crons,
+        lessons=MagicMock(),
+        start_time=time.time(),
+        subagents=MagicMock(count=0),
+    )
+    state._owner_hash = "owner-hash-fixture"
+    app = web.Application()
+    app["state"] = state
+    resp = await api_status(make_mocked_request("GET", "/api/status", app=app))
+    return json.loads(resp.body.decode())
+
+
+@pytest.mark.asyncio
+async def test_api_status_names_the_refuse_writes_state_and_its_remedy(
+    map_dir, unreadable_once, monkeypatch
+) -> None:
+    """The scattered write failures after a failed read have one place that explains them."""
+    refusing = await _api_status_body(monkeypatch, map_dir, SessionMap())
+    assert refusing["session_map_writes_refused"] is True
+    assert "restart the gateway once the file is readable" in refusing["session_map_remedy"]
+
+    healthy = await _api_status_body(monkeypatch, map_dir, SessionMap())
+    assert healthy["session_map_writes_refused"] is False
+    assert healthy["session_map_remedy"] == ""
