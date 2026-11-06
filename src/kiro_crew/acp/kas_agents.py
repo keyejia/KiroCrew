@@ -85,6 +85,7 @@ from kiro_crew.acp.kas_permissions import (
     CREW_ANSWERED_COMMANDS_KEY,
     CREW_ANSWERED_WRITES_KEY,
     CREW_SHELL_ALLOWLIST_KEY,
+    CREW_SPEC_DENIES_KEY,
     CREW_WRITE_ALLOWLIST_KEY,
     HOOK_GATEABLE_CAPABILITIES,
     _entry_crew_answered,
@@ -105,10 +106,9 @@ from kiro_crew.acp.kas_permissions import (
 )
 from kiro_crew.acp.kas_projection_reads import _registry_governed, _relayed_env_references
 from kiro_crew.acp.kas_prompt_paths import is_unsafe_prompt_path as _is_unsafe_prompt_path
-from kiro_crew.acp.kas_tool_limits import (
-    _KAS_CARRIED_ELSEWHERE,
-    _KAS_DISCARDED_ENTRY_KEYS,
-)
+from kiro_crew.acp.kas_spec_denies import commands_lifted_by_denies as _commands_lifted_by_denies
+from kiro_crew.acp.kas_spec_denies import spec_denies_record
+from kiro_crew.acp.kas_tool_limits import _KAS_CARRIED_ELSEWHERE, _KAS_DISCARDED_ENTRY_KEYS
 from kiro_crew.acp.kas_tool_limits import disabled_tool_exclusions as _disabled_tool_exclusions
 from kiro_crew.agent_discovery import (
     AgentsDirMemo,
@@ -267,6 +267,7 @@ def spec_keys_without_carrier(
         isinstance(tools_settings, dict)
         and crew_answered_commands(tools_settings)
         and _allowed_commands_withheld(spec, None)
+        and not _commands_lifted_by_denies(spec)
     ):
         # Every entry is usable, but the session answers none of them: name each
         # shell key that carries one, so the operator learns why they prompt.
@@ -1131,6 +1132,7 @@ def to_client_custom_agent(
     # replacement. The translated block goes through the same merge as an
     # authored one: its denies travel, its allows meet the ceiling.
     translated, _ = tools_settings_to_permissions(spec.get("toolsSettings"))
+    untranslated_policy = permissions  # what a checked deny is lifted against
     permissions = merge_user_permissions(
         permissions,
         translated,
@@ -1183,6 +1185,7 @@ def to_client_custom_agent(
     # spec's author wrote for a capability -- including one a merge refused or a
     # translation could not carry -- keeps its built-ins out of what Crew answers,
     # so the call prompts exactly as the author asked.
+    grant_candidates = crew_answered
     crew_answered = withhold_answered_under_authored_rules(
         crew_answered,
         authored_policy,
@@ -1201,6 +1204,18 @@ def to_client_custom_agent(
     answered_commands = crew_answered_commands(spec.get("toolsSettings"), spec.get("permissions"))
     if answered_commands and not _allowed_commands_withheld(spec, authored_policy):
         out[CREW_ANSWERED_COMMANDS_KEY] = answered_commands
+    # What only a `deniedCommands` / write `deniedPaths` held back, with the denies
+    # the gate checks first (`kas_spec_denies`).
+    denies = spec_denies_record(
+        spec,
+        candidates=grant_candidates,
+        answered=crew_answered,
+        policy=untranslated_policy,
+        commands=answered_commands,
+        commands_answered=CREW_ANSWERED_COMMANDS_KEY in out,
+    )
+    if denies:
+        out[CREW_SPEC_DENIES_KEY] = denies
     # `toolsSettings.shell.denyByDefault`: the only commands the shell may run.
     # A restriction, so recorded whatever the ceiling says; the gate refuses every
     # other shell call of this agent (`spec-shell-allowlist` tier), unless

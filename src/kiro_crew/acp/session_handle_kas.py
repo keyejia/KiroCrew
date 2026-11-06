@@ -282,6 +282,11 @@ def _handle_kas_update(
             self.kas_spec_write_allowlist = switched_write_allowlist(
                 registered, mode_id, getattr(self, "_bound_cwd", "")
             )
+            from kiro_crew.acp.kas_spec_denies import switched_spec_denies
+
+            self.kas_spec_denies = switched_spec_denies(
+                registered, mode_id, getattr(self, "_bound_cwd", "")
+            )
         return [AcpEvent(kind=EVENT_AGENT_SWITCHED, text=crew_id)]
     if session_update == UPDATE_SESSION_INFO:
         return self._handle_kas_session_info(update)

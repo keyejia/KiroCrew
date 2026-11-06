@@ -714,4 +714,5 @@ def _build_permission_event(self: AcpSessionHandle, msg: JsonRpcMessage) -> AcpE
         event.spec_shell_allowlist = getattr(self, "kas_spec_shell_allowlist", None)
         event.spec_write_allowlist = getattr(self, "kas_spec_write_allowlist", None)
         event.spec_write_cwd = str(getattr(self, "_bound_cwd", "") or "")
+        event.spec_denied_grant = getattr(self, "kas_spec_denies", None)
     return event
