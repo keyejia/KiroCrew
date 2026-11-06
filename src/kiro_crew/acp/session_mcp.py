@@ -1856,6 +1856,23 @@ def native_mount_withholding(
     return None
 
 
+def _registry_ceiling_applies(declared: bool | None = None) -> bool:
+    """Whether the registry ceiling withholds every per-session element.
+
+    True when registry mode is declared (:func:`_registry_mode`, or *declared*
+    when the caller already read it) and an admin registry may govern this
+    sign-in. When it is known that none can
+    (:func:`kiro_crew.kiro_cli.registry_governance_known_unreachable`), the spec
+    carries the control plane unmarked and it gets its element. The one
+    predicate both :func:`kiro_control_plane_servers` and the native skill
+    projection decide on, so the projection injects ``skill_search`` exactly
+    when the mount can bind it.
+    """
+    if declared is None:
+        declared = _registry_mode()
+    return declared and not _kiro_cli.registry_governance_known_unreachable()
+
+
 def kiro_control_plane_servers(
     agent: str | None,
     *,
@@ -1904,7 +1921,7 @@ def kiro_control_plane_servers(
     # registry can govern this sign-in: the spec then carries the control plane
     # unmarked (``managed_mcp._registry_marker_for``), so it gets its element too.
     registry_declared = _registry_mode()
-    if not agent or (registry_declared and not _kiro_cli.registry_governance_known_unreachable()):
+    if not agent or _registry_ceiling_applies(registry_declared):
         return NativeControlPlaneMount([], {})
     spec = spec_override if spec_override is not None else _agent_spec_for(agent, work_dir)
     if not isinstance(spec, dict) or not isinstance(spec.get("mcpServers"), dict):
